@@ -1,15 +1,84 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    id 'com.google.gms.google-services' apply false
+    id 'com.google.gms.google-services'
 }
 
+import groovy.json.JsonSlurper
+
+def expectedApplicationId = "com.aquiresolve.app"
+def googleServicesRelativePath = "app/google-services.json"
 def googleServicesFile = file("google-services.json")
-if (googleServicesFile.exists()) {
-    apply plugin: 'com.google.gms.google-services'
-    logger.lifecycle("google-services plugin aplicado para ${project.path}.")
-} else {
-    logger.lifecycle("google-services.json ausente em ${project.path}; build local sem auto-config do Firebase.")
+
+def validateGoogleServicesConfig = tasks.register("validateGoogleServicesConfig") {
+    group = "verification"
+    description = "Valida presença e compatibilidade do google-services.json obrigatório."
+
+    doLast {
+        if (!googleServicesFile.exists()) {
+            throw new GradleException(
+                "Configuração Firebase obrigatória ausente em ${googleServicesRelativePath}. " +
+                "Baixe o google-services.json correto no Firebase Console e coloque em app/google-services.json."
+            )
+        }
+
+        def parsedJson
+        try {
+            parsedJson = new JsonSlurper().parseText(googleServicesFile.getText("UTF-8"))
+        } catch (Exception e) {
+            throw new GradleException(
+                "Arquivo ${googleServicesRelativePath} inválido: ${e.message}. " +
+                "Baixe novamente o arquivo correto no Firebase Console."
+            )
+        }
+
+        def clients = parsedJson?.client instanceof List ? parsedJson.client : []
+        if (clients.isEmpty()) {
+            throw new GradleException(
+                "Arquivo ${googleServicesRelativePath} inválido: campo 'client' ausente/vazio. " +
+                "Use o google-services.json baixado no Firebase Console."
+            )
+        }
+
+        def matchingClient = clients.find { client ->
+            client?.client_info?.android_client_info?.package_name?.toString() == expectedApplicationId
+        }
+
+        if (matchingClient == null) {
+            def foundPackages = clients.collect {
+                it?.client_info?.android_client_info?.package_name?.toString()
+            }.findAll { it != null && !it.isBlank() }.unique()
+
+            throw new GradleException(
+                "Arquivo ${googleServicesRelativePath} incompatível. " +
+                "Esperado package_name='${expectedApplicationId}', encontrados=${foundPackages}. " +
+                "Baixe o google-services.json correto para este app no Firebase Console."
+            )
+        }
+
+        def projectId = parsedJson?.project_info?.project_id?.toString()?.trim()
+        def mobileSdkAppId = matchingClient?.client_info?.mobilesdk_app_id?.toString()?.trim()
+        def apiKey = (matchingClient?.api_key instanceof List
+            ? matchingClient.api_key.find { it?.current_key?.toString()?.trim() }
+            : null
+        )?.current_key?.toString()?.trim()
+
+        if (!projectId || !mobileSdkAppId || !apiKey) {
+            throw new GradleException(
+                "Arquivo ${googleServicesRelativePath} incompleto para package='${expectedApplicationId}'. " +
+                "Campos obrigatórios ausentes: project_id/mobilesdk_app_id/api_key. " +
+                "Baixe novamente o arquivo correto no Firebase Console."
+            )
+        }
+
+        logger.lifecycle(
+            "Validação Firebase OK: ${googleServicesRelativePath} encontrado e compatível com package '${expectedApplicationId}'."
+        )
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(validateGoogleServicesConfig)
 }
 
 android {

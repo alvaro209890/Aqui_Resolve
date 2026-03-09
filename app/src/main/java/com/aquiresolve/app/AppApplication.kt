@@ -14,6 +14,11 @@ class AppApplication : Application() {
             Log.d("AppApplication", "Firebase initialized in Application.onCreate")
         } catch (e: Exception) {
             Log.e("AppApplication", "Error initializing Firebase: ${e.message}", e)
+            throw IllegalStateException(
+                "Critical startup failure. Verify app/google-services.json for package com.aquiresolve.app " +
+                    "and download the correct file from Firebase Console.",
+                e
+            )
         }
     }
 }
