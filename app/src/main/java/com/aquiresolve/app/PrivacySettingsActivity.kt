@@ -11,7 +11,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.aquiresolve.app.databinding.ActivityPrivacySettingsBinding
 import com.aquiresolve.app.utils.PermissionHelper
-import com.google.android.material.switchmaterial.SwitchMaterial
 import kotlinx.coroutines.launch
 
 class PrivacySettingsActivity : AppCompatActivity() {
@@ -20,6 +19,7 @@ class PrivacySettingsActivity : AppCompatActivity() {
     private lateinit var authManager: FirebaseAuthManager
     private lateinit var privacyManager: FirebasePrivacyManager
     private var currentSettings: FirebasePrivacyManager.PrivacySettings? = null
+    private var isBindingSettings = false
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -28,7 +28,10 @@ class PrivacySettingsActivity : AppCompatActivity() {
             updatePrivacySetting("notifications_enabled", true)
         } else {
             Toast.makeText(this, "Permissão negada. Habilite nas configurações do app para receber notificações.", Toast.LENGTH_LONG).show()
+            isBindingSettings = true
             binding.switchNotifications.isChecked = false
+            isBindingSettings = false
+            updatePrivacySetting("notifications_enabled", false)
         }
     }
 
@@ -63,6 +66,7 @@ class PrivacySettingsActivity : AppCompatActivity() {
     private fun setupClickListeners() {
         // Notificações - solicitar permissão ao ativar (Android 13+)
         binding.switchNotifications.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingSettings) return@setOnCheckedChangeListener
             if (isChecked && PermissionHelper.needsNotificationPermission() && !PermissionHelper.isNotificationPermissionGranted(this)) {
                 requestNotificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                 // Salvar será feito no callback do launcher se concedido
@@ -73,6 +77,7 @@ class PrivacySettingsActivity : AppCompatActivity() {
 
         // Compartilhamento de dados
         binding.switchDataSharing.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingSettings) return@setOnCheckedChangeListener
             updatePrivacySetting("data_sharing_enabled", isChecked)
         }
 
@@ -126,8 +131,10 @@ class PrivacySettingsActivity : AppCompatActivity() {
     }
 
     private fun updateUI(settings: FirebasePrivacyManager.PrivacySettings) {
+        isBindingSettings = true
         binding.switchNotifications.isChecked = settings.notificationsEnabled
         binding.switchDataSharing.isChecked = settings.dataSharingEnabled
+        isBindingSettings = false
         // Removidos: localização e perfil público
     }
 

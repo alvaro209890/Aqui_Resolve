@@ -1,6 +1,5 @@
 ﻿package com.aquiresolve.app
 
-import android.app.Activity
 import android.app.TimePickerDialog
 import android.os.Bundle
 import android.view.View
@@ -22,6 +21,7 @@ class NotificationSettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityNotificationSettingsBinding
     private lateinit var privacyManager: FirebasePrivacyManager
+    private var isBindingSettings = false
     
     // Formato de hora
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -43,7 +43,13 @@ class NotificationSettingsActivity : AppCompatActivity() {
     ) { isGranted ->
         if (!isGranted) {
             Toast.makeText(this, "Permissão negada. Habilite nas configurações do app para receber notificações.", Toast.LENGTH_LONG).show()
+            isBindingSettings = true
             binding.switchNotifications.isChecked = false
+            isBindingSettings = false
+            updateNotificationDependentState(false)
+            lifecycleScope.launch {
+                privacyManager.updatePrivacySetting("notifications_enabled", false)
+            }
         }
     }
 
@@ -90,20 +96,18 @@ class NotificationSettingsActivity : AppCompatActivity() {
         
         // Switch principal de notificações - solicitar permissão ao ativar
         binding.switchNotifications.setOnCheckedChangeListener { _, isChecked ->
+            if (isBindingSettings) return@setOnCheckedChangeListener
             if (isChecked && PermissionHelper.needsNotificationPermission() && !PermissionHelper.isNotificationPermissionGranted(this)) {
                 requestNotificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                return@setOnCheckedChangeListener
             }
+            updateNotificationDependentState(isChecked)
         }
         
         // Switch de modo silencioso
         binding.switchQuietHours.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                binding.layoutQuietHoursStart.visibility = View.VISIBLE
-                binding.layoutQuietHoursEnd.visibility = View.VISIBLE
-            } else {
-                binding.layoutQuietHoursStart.visibility = View.GONE
-                binding.layoutQuietHoursEnd.visibility = View.GONE
-            }
+            if (isBindingSettings) return@setOnCheckedChangeListener
+            updateQuietHoursVisibility(isChecked && binding.switchNotifications.isChecked)
         }
         
         // Seleção de horário de início
@@ -151,6 +155,7 @@ class NotificationSettingsActivity : AppCompatActivity() {
                 } catch (_: Exception) { }
                 
                 // Aplicar configurações aos switches
+                isBindingSettings = true
                 binding.switchNotifications.isChecked = notificationsEnabled
                 binding.switchNotificationSound.isChecked = soundEnabled
                 binding.switchNotificationVibration.isChecked = vibrationEnabled
@@ -158,18 +163,13 @@ class NotificationSettingsActivity : AppCompatActivity() {
                 binding.switchChatNotifications.isChecked = chatNotifications
                 binding.switchPaymentNotifications.isChecked = paymentNotifications
                 binding.switchQuietHours.isChecked = quietHoursEnabled
+                isBindingSettings = false
+                updateNotificationDependentState(notificationsEnabled)
                 
                 // Solicitar permissão ao carregar se notificações habilitadas mas permissão negada (Android 13+)
                 if (notificationsEnabled && PermissionHelper.needsNotificationPermission() && !PermissionHelper.isNotificationPermissionGranted(this@NotificationSettingsActivity)) {
                     requestNotificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                 }
-                
-                // Atualizar visibilidade dos horários
-                if (quietHoursEnabled) {
-                    binding.layoutQuietHoursStart.visibility = View.VISIBLE
-                    binding.layoutQuietHoursEnd.visibility = View.VISIBLE
-                }
-                
             } catch (e: Exception) {
                 showToast("Erro ao carregar configurações: ${e.message}")
             }
@@ -182,21 +182,29 @@ class NotificationSettingsActivity : AppCompatActivity() {
     private fun saveSettings() {
         lifecycleScope.launch {
             try {
+                if (binding.switchNotifications.isChecked &&
+                    PermissionHelper.needsNotificationPermission() &&
+                    !PermissionHelper.isNotificationPermissionGranted(this@NotificationSettingsActivity)
+                ) {
+                    showToast("Permita notificações no sistema para habilitar este recurso")
+                    return@launch
+                }
+
                 // Salvar configurações
-                privacyManager.updatePrivacySetting("notifications_enabled", binding.switchNotifications.isChecked)
-                privacyManager.updatePrivacySetting("notification_sound_enabled", binding.switchNotificationSound.isChecked)
-                privacyManager.updatePrivacySetting("notification_vibration_enabled", binding.switchNotificationVibration.isChecked)
-                privacyManager.updatePrivacySetting("order_notifications_enabled", binding.switchOrderNotifications.isChecked)
-                privacyManager.updatePrivacySetting("chat_notifications_enabled", binding.switchChatNotifications.isChecked)
-                privacyManager.updatePrivacySetting("payment_notifications_enabled", binding.switchPaymentNotifications.isChecked)
-                privacyManager.updatePrivacySetting("quiet_hours_enabled", binding.switchQuietHours.isChecked)
+                updateBooleanSettingOrThrow("notifications_enabled", binding.switchNotifications.isChecked)
+                updateBooleanSettingOrThrow("notification_sound_enabled", binding.switchNotificationSound.isChecked)
+                updateBooleanSettingOrThrow("notification_vibration_enabled", binding.switchNotificationVibration.isChecked)
+                updateBooleanSettingOrThrow("order_notifications_enabled", binding.switchOrderNotifications.isChecked)
+                updateBooleanSettingOrThrow("chat_notifications_enabled", binding.switchChatNotifications.isChecked)
+                updateBooleanSettingOrThrow("payment_notifications_enabled", binding.switchPaymentNotifications.isChecked)
+                updateBooleanSettingOrThrow("quiet_hours_enabled", binding.switchQuietHours.isChecked)
                 
                 // Salvar horários de silêncio se habilitado
                 if (binding.switchQuietHours.isChecked) {
                     val startTime = timeFormat.format(quietHoursStart.time)
                     val endTime = timeFormat.format(quietHoursEnd.time)
-                    privacyManager.updatePrivacySettingString("quiet_hours_start", startTime)
-                    privacyManager.updatePrivacySettingString("quiet_hours_end", endTime)
+                    updateStringSettingOrThrow("quiet_hours_start", startTime)
+                    updateStringSettingOrThrow("quiet_hours_end", endTime)
                 }
                 
                 showToast("✅ Configurações salvas com sucesso!")
@@ -235,6 +243,42 @@ class NotificationSettingsActivity : AppCompatActivity() {
     private fun updateQuietHoursTexts() {
         binding.tvQuietHoursStart.text = timeFormat.format(quietHoursStart.time)
         binding.tvQuietHoursEnd.text = timeFormat.format(quietHoursEnd.time)
+    }
+
+    private fun updateQuietHoursVisibility(visible: Boolean) {
+        binding.layoutQuietHoursStart.visibility = if (visible) View.VISIBLE else View.GONE
+        binding.layoutQuietHoursEnd.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    private fun updateNotificationDependentState(notificationsEnabled: Boolean) {
+        val enabledViews = listOf(
+            binding.switchNotificationSound,
+            binding.switchNotificationVibration,
+            binding.switchOrderNotifications,
+            binding.switchChatNotifications,
+            binding.switchPaymentNotifications,
+            binding.switchQuietHours
+        )
+        enabledViews.forEach { view ->
+            view.isEnabled = notificationsEnabled
+            view.alpha = if (notificationsEnabled) 1.0f else 0.5f
+        }
+
+        updateQuietHoursVisibility(notificationsEnabled && binding.switchQuietHours.isChecked)
+    }
+
+    private suspend fun updateBooleanSettingOrThrow(settingName: String, value: Boolean) {
+        val result = privacyManager.updatePrivacySetting(settingName, value)
+        if (result.isFailure) {
+            throw (result.exceptionOrNull() ?: IllegalStateException("Falha ao salvar $settingName"))
+        }
+    }
+
+    private suspend fun updateStringSettingOrThrow(settingName: String, value: String) {
+        val result = privacyManager.updatePrivacySettingString(settingName, value)
+        if (result.isFailure) {
+            throw (result.exceptionOrNull() ?: IllegalStateException("Falha ao salvar $settingName"))
+        }
     }
 
     /**

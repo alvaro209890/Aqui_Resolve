@@ -23,6 +23,7 @@ import com.google.android.material.chip.Chip
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.yalantis.ucrop.UCrop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -236,7 +237,7 @@ class ProviderProfileFragment : Fragment() {
      * Carrega a nota média do prestador
      */
     private fun loadProviderRating() {
-        val userId = authManager.getLocalUserData()?.uid ?: return
+        val userId = getCurrentUserId() ?: return
         lifecycleScope.launch {
             try {
                 val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
@@ -469,24 +470,53 @@ class ProviderProfileFragment : Fragment() {
             showToast("❌ Preencha todos os campos obrigatórios")
             return
         }
-        
+
+        val userId = getCurrentUserId()
+        if (userId.isNullOrBlank()) {
+            showToast("❌ Usuário não autenticado")
+            return
+        }
+
         lifecycleScope.launch {
             try {
-                val provider = LocalAuthManager.getCurrentProviderData()
-                if (provider != null) {
-                    // Atualizar dados do prestador
-                    val updatedProvider = provider.copy(
+                val updates = mapOf(
+                    "fullName" to fullName,
+                    "phone" to phone,
+                    "cpf" to cpf,
+                    "updatedAt" to Timestamp.now()
+                )
+
+                firestore.collection("providers")
+                    .document(userId)
+                    .set(updates, SetOptions.merge())
+                    .await()
+
+                val localUser = authManager.getLocalUserData()
+                if (localUser != null) {
+                    val updatedLocalUser = localUser.copy(
                         fullName = fullName,
-                        phone = phone,
-                        cpf = cpf
+                        phone = phone
                     )
-                    
-                    // Salvar no LocalAuthManager
-                    // TODO: Implementar método saveProviderData no LocalAuthManager
-                    // LocalAuthManager.saveProviderData(updatedProvider)
-                    
-                    showToast("✅ Informações pessoais salvas com sucesso!")
+                    val userUpdateResult = authManager.updateUserProfile(updatedLocalUser)
+                    if (userUpdateResult.isFailure) {
+                        throw (userUpdateResult.exceptionOrNull() ?: IllegalStateException("Falha ao salvar dados do usuário"))
+                    }
+                } else {
+                    firestore.collection("users")
+                        .document(userId)
+                        .set(
+                            mapOf(
+                                "fullName" to fullName,
+                                "phone" to phone,
+                                "updatedAt" to Timestamp.now()
+                            ),
+                            SetOptions.merge()
+                        )
+                        .await()
                 }
+
+                showToast("✅ Informações pessoais salvas com sucesso!")
+                loadProviderData()
             } catch (e: Exception) {
                 showToast("❌ Erro ao salvar informações: ${e.message}")
             }
@@ -553,28 +583,44 @@ class ProviderProfileFragment : Fragment() {
             showToast("❌ Preencha todos os campos bancários")
             return
         }
-        
+
+        val userId = getCurrentUserId()
+        if (userId.isNullOrBlank()) {
+            showToast("❌ Usuário não autenticado")
+            return
+        }
+
         lifecycleScope.launch {
             try {
-                val provider = LocalAuthManager.getCurrentProviderData()
-                if (provider != null) {
-                    // Atualizar dados bancários do prestador
-                    val updatedProvider = provider.copy(
-                        bank = bankName,
-                        agency = agency,
-                        account = account
+                val bankMap = mapOf(
+                    "bankName" to bankName,
+                    "agency" to agency,
+                    "account" to account
+                )
+
+                firestore.collection("providers")
+                    .document(userId)
+                    .set(
+                        mapOf(
+                            "bank" to bankMap,
+                            "updatedAt" to Timestamp.now()
+                        ),
+                        SetOptions.merge()
                     )
-                    
-                    // Salvar no LocalAuthManager
-                    // TODO: Implementar método saveProviderData no LocalAuthManager
-                    // LocalAuthManager.saveProviderData(updatedProvider)
-                    
-                    showToast("✅ Dados bancários salvos com sucesso!")
-                }
+                    .await()
+
+                showToast("✅ Dados bancários salvos com sucesso!")
+                loadProviderData()
             } catch (e: Exception) {
                 showToast("❌ Erro ao salvar dados bancários: ${e.message}")
             }
         }
+    }
+
+    private fun getCurrentUserId(): String? {
+        return authManager.getLocalUserData()?.uid
+            ?: authManager.getCurrentUser()?.uid
+            ?: firebaseAuth.currentUser?.uid
     }
 
     /**
