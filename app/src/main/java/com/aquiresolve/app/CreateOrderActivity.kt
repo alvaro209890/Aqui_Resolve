@@ -9,8 +9,11 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -38,6 +41,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import java.text.NumberFormat
 
 /**
  * CreateOrderActivity - Tela para criação de pedidos
@@ -109,6 +113,13 @@ class CreateOrderActivity : AppCompatActivity() {
         val savedAddress: SavedAddress,
         val request: CreateOrderRequest
     )
+
+    private data class ServiceTypeOption(
+        val name: String,
+        val priceLabel: String
+    ) {
+        override fun toString(): String = name
+    }
     
     // Launcher para pagamento
     private val paymentLauncher = registerForActivityResult(
@@ -450,12 +461,85 @@ class CreateOrderActivity : AppCompatActivity() {
             )
             else -> listOf("Selecione um nicho primeiro")
         }
-        
-        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, serviceTypes)
+
+        val options = serviceTypes.map { serviceType ->
+            ServiceTypeOption(
+                name = serviceType,
+                priceLabel = getClientPriceLabel(niche, serviceType)
+            )
+        }
+
+        val adapter = ServiceTypeDropdownAdapter(options)
         binding.spinnerServiceType.setAdapter(adapter)
         
         // Limpar seleção atual
         binding.spinnerServiceType.setText("")
+    }
+
+    private fun getClientPriceLabel(niche: String, serviceType: String): String {
+        if (serviceType == "Selecione um nicho primeiro") {
+            return ""
+        }
+
+        if (com.aquiresolve.app.models.ServicePricing.isConsultPrice(niche, serviceType)) {
+            return "A consultar"
+        }
+
+        val price = com.aquiresolve.app.models.ServicePricing.getPrice(
+            category = niche,
+            serviceType = serviceType
+        ) ?: com.aquiresolve.app.models.ServicePricing.getDefaultPrice(niche)
+
+        return formatCurrency(price)
+    }
+
+    private fun formatCurrency(value: Double): String {
+        return NumberFormat.getCurrencyInstance(Locale("pt", "BR")).format(value)
+    }
+
+    private inner class ServiceTypeDropdownAdapter(
+        options: List<ServiceTypeOption>
+    ) : ArrayAdapter<ServiceTypeOption>(
+        this,
+        R.layout.item_service_type_dropdown_option,
+        options
+    ) {
+        private val inflater = LayoutInflater.from(context)
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            return buildRow(position, convertView, parent, isDropdown = false)
+        }
+
+        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+            return buildRow(position, convertView, parent, isDropdown = true)
+        }
+
+        private fun buildRow(
+            position: Int,
+            convertView: View?,
+            parent: ViewGroup,
+            isDropdown: Boolean
+        ): View {
+            val view = convertView ?: inflater.inflate(
+                R.layout.item_service_type_dropdown_option,
+                parent,
+                false
+            )
+            val option = getItem(position) ?: return view
+
+            val serviceNameView = view.findViewById<TextView>(R.id.tvServiceName)
+            val servicePriceView = view.findViewById<TextView>(R.id.tvServicePrice)
+
+            serviceNameView.text = option.name
+            if (isDropdown) {
+                servicePriceView.visibility = if (option.priceLabel.isBlank()) View.GONE else View.VISIBLE
+                servicePriceView.text = option.priceLabel
+            } else {
+                servicePriceView.visibility = View.GONE
+            }
+
+            return view
+        }
     }
 
     private fun mapCategoryIdToName(categoryId: String): String {

@@ -4,11 +4,14 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -19,8 +22,6 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.text.SimpleDateFormat
-import java.util.*
 
 class ClientHomeActivity : AppCompatActivity() {
 
@@ -40,6 +41,7 @@ class ClientHomeActivity : AppCompatActivity() {
         setContentView(binding.root)
         authManager = FirebaseAuthManager(this)
 
+        setupWindowInsets()
         setupUI()
         setupClickListeners()
         loadProfileImage()
@@ -54,9 +56,25 @@ class ClientHomeActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
+        binding.bottomNavigation.selectedItemId = R.id.navigation_home
         window.statusBarColor = ContextCompat.getColor(this, R.color.primary_color)
+        window.navigationBarColor = ContextCompat.getColor(this, R.color.white)
         binding.tvWelcome.text = "Olá! Que tipo de serviço você precisa?"
         binding.tvRecentOrders.text = "Seus Pedidos Recentes"
+    }
+
+    private fun setupWindowInsets() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rootLayout) { _, windowInsets ->
+            val systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+            binding.appBarLayout.updatePadding(top = systemBars.top)
+            binding.contentScroll.updatePadding(bottom = dpToPx(96) + systemBars.bottom)
+            binding.bottomNavigation.updatePadding(bottom = systemBars.bottom)
+
+            windowInsets
+        }
     }
 
     /**
@@ -142,7 +160,7 @@ class ClientHomeActivity : AppCompatActivity() {
                     } catch (e: Exception) {
                         null
                     }
-                }.sortedByDescending { it.createdAt?.toDate()?.time ?: 0L }
+                }.sortedByDescending { it.createdAt.toDate().time }
                     .take(3)
 
                 binding.containerRecentOrders.removeAllViews()
@@ -154,7 +172,6 @@ class ClientHomeActivity : AppCompatActivity() {
                     binding.tvEmptyOrders.visibility = View.GONE
                     binding.containerRecentOrders.visibility = View.VISIBLE
 
-                    val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
                     for (order in orders) {
                         val card = LayoutInflater.from(this@ClientHomeActivity)
                             .inflate(R.layout.item_recent_order, binding.containerRecentOrders, false)
@@ -205,5 +222,9 @@ class ClientHomeActivity : AppCompatActivity() {
 
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun dpToPx(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 }

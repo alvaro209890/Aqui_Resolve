@@ -8,9 +8,12 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.aquiresolve.app.databinding.ActivityServicesBinding
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 /**
@@ -36,6 +39,7 @@ class ServicesActivity : AppCompatActivity() {
         
         serviceManager = FirebaseServiceManager()
         
+        setupWindowInsets()
         setupUI()
         setupClickListeners()
         setupSearchListener()
@@ -46,12 +50,24 @@ class ServicesActivity : AppCompatActivity() {
      * Configura a interface
      */
     private fun setupUI() {
-        // Configurar a status bar
         window.statusBarColor = ContextCompat.getColor(this, R.color.primary_color)
+        window.navigationBarColor = ContextCompat.getColor(this, R.color.background_color)
         
-        // Configurar estados iniciais
         hideEmptyState()
         hideLoadingState()
+    }
+
+    private fun setupWindowInsets() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rootLayout) { _, windowInsets ->
+            val systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+            binding.appBarLayout.updatePadding(top = systemBars.top)
+            binding.contentScroll.updatePadding(bottom = dpToPx(32) + systemBars.bottom)
+
+            windowInsets
+        }
     }
 
     /**
@@ -288,5 +304,9 @@ class ServicesActivity : AppCompatActivity() {
      */
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun dpToPx(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 }
