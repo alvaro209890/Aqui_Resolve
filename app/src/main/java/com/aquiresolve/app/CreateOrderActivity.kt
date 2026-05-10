@@ -118,7 +118,7 @@ class CreateOrderActivity : AppCompatActivity() {
         val name: String,
         val priceLabel: String
     ) {
-        override fun toString(): String = name
+        override fun toString(): String = if (priceLabel.isNotBlank()) "$name — $priceLabel" else name
     }
     
     // Launcher para pagamento
@@ -555,12 +555,8 @@ class CreateOrderActivity : AppCompatActivity() {
             val servicePriceView = view.findViewById<TextView>(R.id.tvServicePrice)
 
             serviceNameView.text = option.name
-            if (isDropdown) {
-                servicePriceView.visibility = if (option.priceLabel.isBlank()) View.GONE else View.VISIBLE
-                servicePriceView.text = option.priceLabel
-            } else {
-                servicePriceView.visibility = View.GONE
-            }
+            servicePriceView.visibility = if (option.priceLabel.isNotBlank()) View.VISIBLE else View.GONE
+            servicePriceView.text = option.priceLabel
 
             return view
         }
