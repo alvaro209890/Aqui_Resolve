@@ -1401,7 +1401,7 @@ class OrderDetailsActivity : AppCompatActivity() {
     private fun shouldUpdateRoute(newPoint: GeoPoint): Boolean {
         val now = System.currentTimeMillis()
         if (lastProviderPoint == null) return true
-        val currentPoint = lastProviderPoint // smart-cast seguro, evita !!
+        val currentPoint = lastProviderPoint ?: return true
         val results = FloatArray(1)
         Location.distanceBetween(
             currentPoint.latitude,
