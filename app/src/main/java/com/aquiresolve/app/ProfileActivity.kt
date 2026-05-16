@@ -475,7 +475,7 @@ class ProfileActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 if (authManager.isUsernameTaken(newUsername)) {
-                    showToast("❌ Nome de usuário já está em uso")
+                    showToast("❌ Esse nome de usuário já pertence a outra conta. Escolha outro ou adicione um sobrenome/número.")
                     return@launch
                 }
                 

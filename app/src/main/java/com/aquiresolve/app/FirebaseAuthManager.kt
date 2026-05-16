@@ -62,7 +62,7 @@ class FirebaseAuthManager(private val context: Context) {
             // Verificar se o username já está em uso
             if (!isUsernameAvailable(userData.username)) {
                 android.util.Log.e("FirebaseAuthManager", "❌ ERRO: Username já está em uso")
-                return Result.failure(Exception("Este nome de usuário já está em uso"))
+                return Result.failure(Exception("Este nome de usuário já está em uso por outra conta. O nome de usuário precisa ser único no app."))
             }
             
             android.util.Log.d("FirebaseAuthManager", "🔄 CRIANDO USUÁRIO NO FIREBASE AUTH...")
@@ -126,7 +126,7 @@ class FirebaseAuthManager(private val context: Context) {
                 }
                 e.message?.contains("nome de usuário já está em uso") == true -> {
                     android.util.Log.e("FirebaseAuthManager", "ERRO: Username já está em uso")
-                    Result.failure(Exception("Este nome de usuário já está em uso"))
+                    Result.failure(Exception("Este nome de usuário já está em uso por outra conta. O nome de usuário precisa ser único no app."))
                 }
                 e.message?.contains("password is invalid") == true -> {
                     android.util.Log.e("FirebaseAuthManager", "ERRO: Senha inválida")

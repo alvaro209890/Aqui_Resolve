@@ -121,7 +121,7 @@ class PersonalDataActivity : AppCompatActivity() {
                     }
                     // Verificar se já está em uso
                     if (authManager.isUsernameTaken(newUsername)) {
-                        binding.tilUsername.error = "Nome de usuário já em uso"
+                        binding.tilUsername.error = "Esse nome de usuário já pertence a outra conta. Escolha outro ou adicione um sobrenome/número."
                         showLoading(false)
                         return@launch
                     }

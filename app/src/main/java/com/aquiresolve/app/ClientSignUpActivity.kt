@@ -256,7 +256,7 @@ class ClientSignUpActivity : AppCompatActivity() {
                 // Verificar se o nome de usuário já existe
                 if (authManager.isUsernameTaken(username)) {
                     android.util.Log.e("ClientSignUp", "❌ NOME DE USUÁRIO JÁ EXISTE")
-                    handleSignUpError("Nome de usuário '$username' já está em uso. Escolha outro nome.")
+                    handleSignUpError("O nome de usuário '$username' já está sendo usado por outra pessoa. Dois usuários não podem ter o mesmo nome de usuário; escolha outro ou adicione um sobrenome/número.")
                     return@launch
                 }
                 
@@ -322,9 +322,9 @@ class ClientSignUpActivity : AppCompatActivity() {
         setLoadingState(false)
         
         when {
-            errorMessage.contains("nome de usuário já está em uso", ignoreCase = true) -> {
-                binding.tilUsername.error = "Nome de usuário já está em uso"
-                showErrorMessage("❌ Este nome de usuário já está em uso. Escolha outro.")
+            errorMessage.contains("nome de usuário", ignoreCase = true) && errorMessage.contains("uso", ignoreCase = true) -> {
+                binding.tilUsername.error = "Esse nome de usuário já pertence a outra conta"
+                showErrorMessage("❌ $errorMessage")
                 binding.etUsername.requestFocus()
             }
             errorMessage.contains("e-mail já está em uso", ignoreCase = true) || 
