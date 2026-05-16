@@ -443,7 +443,7 @@ class ProfileActivity : AppCompatActivity() {
         
         AlertDialog.Builder(this)
             .setTitle("Editar Nome de Usuário")
-            .setMessage("Digite seu novo nome de usuário (3-20 caracteres, apenas letras, números, _ ou -)")
+            .setMessage("Digite seu novo nome de usuário (3-60 caracteres; pode ser igual ao nome completo)")
             .setView(editText)
             .setPositiveButton("Salvar") { _, _ ->
                 val newUsername = editText.text.toString().trim()

@@ -96,7 +96,7 @@ class PersonalDataActivity : AppCompatActivity() {
         }
 
         if (newUsername.isEmpty() || !authManager.isValidUsername(newUsername)) {
-            binding.tilUsername.error = "Usuário inválido (3-20, letras/números/_-)"
+            binding.tilUsername.error = "Usuário inválido (3-60; pode ser igual ao nome completo)"
             hasError = true
         }
 

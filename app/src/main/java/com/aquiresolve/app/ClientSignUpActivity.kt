@@ -178,7 +178,7 @@ class ClientSignUpActivity : AppCompatActivity() {
             isValid = false
         } else if (!authManager.isValidUsername(username)) {
             android.util.Log.e("ClientSignUp", "❌ ERRO: Nome de usuário inválido")
-            binding.tilUsername.error = "Nome de usuário deve ter 3-20 caracteres (letras, números, _ ou -)"
+            binding.tilUsername.error = "Nome de usuário deve ter 3-60 caracteres (pode ser igual ao nome completo)"
             isValid = false
         } else {
             android.util.Log.d("ClientSignUp", "✅ Nome de usuário válido")

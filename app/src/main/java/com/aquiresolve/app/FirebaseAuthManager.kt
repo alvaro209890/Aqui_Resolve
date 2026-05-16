@@ -454,14 +454,14 @@ class FirebaseAuthManager(private val context: Context) {
      */
     fun isValidUsername(username: String): Boolean {
         // Regras para nome de usuário válido:
-        // - Mínimo 3 caracteres, máximo 20
-        // - Apenas letras, números, underscore e hífen
-        // - Não pode começar ou terminar com underscore ou hífen
-        // - Não pode ter espaços
+        // - Mínimo 3 caracteres, máximo 60
+        // - Aceita letras com acento, números, espaços, underscore, hífen e apóstrofo
+        // - Não pode começar ou terminar com espaço, underscore, hífen ou apóstrofo
+        // Assim o usuário pode usar o próprio nome completo também como nome de usuário.
         
-        if (username.length < 3 || username.length > 20) return false
+        if (username.length < 3 || username.length > 60) return false
         
-        val usernameRegex = Regex("^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$")
+        val usernameRegex = Regex("^[\\p{L}\\p{M}\\p{N}][\\p{L}\\p{M}\\p{N} _'’-]*[\\p{L}\\p{M}\\p{N}]$")
         return usernameRegex.matches(username)
     }
     
