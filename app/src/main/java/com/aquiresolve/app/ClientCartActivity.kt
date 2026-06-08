@@ -46,6 +46,11 @@ class ClientCartActivity : AppCompatActivity() {
     private var checkoutInProgress = false
     private var checkoutResultProcessed = false
 
+    private val cashbackManager = CashbackManager()
+    private val promotionManager = PromotionManager()
+    private var promoConfig = CashbackManager.CashbackConfig()
+    private var currentDiscount = PromotionManager.DiscountResult(0.0, 0.0, "")
+
     private fun resolveItemPrice(item: CartItemData): Double {
         if (item.estimatedPrice > 0) {
             return item.estimatedPrice
@@ -122,6 +127,7 @@ class ClientCartActivity : AppCompatActivity() {
                 val result = cartManager.getItems(userId)
                 if (result.isSuccess) {
                     cartItems = result.getOrNull() ?: emptyList()
+                    promoConfig = cashbackManager.getConfig()
                     cartAdapter.updateItems(cartItems)
                     updateSummary()
                 } else {
@@ -136,10 +142,31 @@ class ClientCartActivity : AppCompatActivity() {
     }
 
     private fun updateSummary() {
-        val total = cartItems.sumOf(::resolveItemPrice)
+        val subtotal = cartItems.sumOf(::resolveItemPrice)
+        currentDiscount = promotionManager.computeDiscount(
+            niches = cartItems.map { it.serviceNiche },
+            subtotal = subtotal,
+            config = promoConfig
+        )
+        val total = (subtotal - currentDiscount.amount).coerceAtLeast(0.0)
 
         binding.tvCartItemsCount.text = "${cartItems.size} item(ns)"
         binding.tvCartTotal.text = String.format("R$ %.2f", total)
+
+        if (currentDiscount.hasDiscount) {
+            binding.layoutSubtotal.visibility = View.VISIBLE
+            binding.tvCartSubtotalValue.text = String.format("R$ %.2f", subtotal)
+            binding.layoutDiscount.visibility = View.VISIBLE
+            binding.tvDiscountLabel.text = currentDiscount.label
+            binding.tvCartDiscount.text = String.format(
+                "- R$ %.2f (%s)",
+                currentDiscount.amount,
+                CashbackManager.formatRate(currentDiscount.percent)
+            )
+        } else {
+            binding.layoutSubtotal.visibility = View.GONE
+            binding.layoutDiscount.visibility = View.GONE
+        }
 
         val empty = cartItems.isEmpty()
         binding.tvEmptyCart.visibility = if (empty) View.VISIBLE else View.GONE
@@ -228,7 +255,8 @@ class ClientCartActivity : AppCompatActivity() {
                     clientName = clientName,
                     clientEmail = clientEmail,
                     checkoutCode = checkoutCode,
-                    clientPhone = clientPhone
+                    clientPhone = clientPhone,
+                    discountPercent = currentDiscount.percent
                 )
 
                 if (preparationResult.isFailure) {

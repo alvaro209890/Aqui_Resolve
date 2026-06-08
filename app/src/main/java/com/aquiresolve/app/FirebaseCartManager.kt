@@ -175,7 +175,8 @@ class FirebaseCartManager(private val context: Context? = null) {
         clientName: String,
         clientEmail: String,
         checkoutCode: String,
-        clientPhone: String? = null
+        clientPhone: String? = null,
+        discountPercent: Double = 0.0
     ): Result<PreparedCartCheckout> {
         return try {
             val cartSnapshot = db.collection(CARTS_COLLECTION)
@@ -209,6 +210,13 @@ class FirebaseCartManager(private val context: Context? = null) {
                 return Result.failure(Exception("Carrinho com valor inválido para pagamento"))
             }
 
+            // Fator de desconto do programa (desconto direto / combos). O valor do
+            // prestador (providerCommission) NÃO é alterado: o desconto é custeado
+            // pela plataforma. O cliente paga `finalPrice` (preço já com desconto).
+            val pct = discountPercent.coerceIn(0.0, 100.0)
+            val factor = 1.0 - pct / 100.0
+            var chargedTotal = 0.0
+
             items.forEach { item ->
                 val orderRef = db.collection("orders").document()
                 createdOrderIds.add(orderRef.id)
@@ -216,6 +224,8 @@ class FirebaseCartManager(private val context: Context? = null) {
                     ?: throw IllegalStateException("Preço do item não calculado")
                 val effectivePrice = pricing.estimatedPrice
                 val providerCommission = pricing.providerCommission
+                val finalPrice = Math.round(effectivePrice * factor * 100.0) / 100.0
+                chargedTotal += finalPrice
 
                 val orderData = mutableMapOf<String, Any>(
                     "clientId" to userId,
@@ -233,6 +243,8 @@ class FirebaseCartManager(private val context: Context? = null) {
                     "status" to OrderData.STATUS_AWAITING_PAYMENT,
                     "paymentStatus" to OrderData.STATUS_AWAITING_PAYMENT,
                     "estimatedPrice" to effectivePrice,
+                    "finalPrice" to finalPrice,
+                    "cartDiscountPercent" to pct,
                     "providerCommission" to providerCommission,
                     "images" to item.imageUrls,
                     "cartCheckoutCode" to checkoutCode,
@@ -258,7 +270,7 @@ class FirebaseCartManager(private val context: Context? = null) {
                     orderIds = createdOrderIds,
                     cartItemIds = cartItemIds,
                     orderCount = items.size,
-                    totalAmount = totalAmount
+                    totalAmount = Math.round(chargedTotal * 100.0) / 100.0
                 )
             )
         } catch (e: Exception) {

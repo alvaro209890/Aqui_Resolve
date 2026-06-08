@@ -38,7 +38,8 @@ class ProfileActivity : AppCompatActivity() {
     private lateinit var authManager: FirebaseAuthManager
     private lateinit var permissionManager: com.aquiresolve.app.utils.ActivityPermissionManager
     private lateinit var firebaseImageManager: FirebaseImageManager
-    
+    private val cashbackManager = CashbackManager()
+
     // Launcher para galeria
     private val galleryLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -156,6 +157,11 @@ class ProfileActivity : AppCompatActivity() {
             val intent = Intent(this, PersonalDataActivity::class.java)
             startActivity(intent)
         }
+
+        // Cashback (somente cliente)
+        binding.llCashback.setOnClickListener {
+            startActivity(Intent(this, CashbackActivity::class.java))
+        }
         
         binding.llNotifications.setOnClickListener {
             showNotificationsDialog()
@@ -212,6 +218,9 @@ class ProfileActivity : AppCompatActivity() {
                 binding.btnBecomeProvider.visibility = View.GONE
                 binding.btnUploadDocuments.visibility = View.VISIBLE
                 binding.llBankData.visibility = View.VISIBLE
+                // Cashback é benefício do cliente
+                binding.llCashback.visibility = View.GONE
+                binding.dividerCashback.visibility = View.GONE
 
                 // Esconder botão de documentos se prestador já aprovado
                 lifecycleScope.launch {
@@ -235,7 +244,11 @@ class ProfileActivity : AppCompatActivity() {
                 binding.btnBecomeProvider.visibility = View.VISIBLE
                 binding.btnUploadDocuments.visibility = View.GONE
                 binding.llBankData.visibility = View.GONE
-                
+                // Cashback é benefício do cliente
+                binding.llCashback.visibility = View.VISIBLE
+                binding.dividerCashback.visibility = View.VISIBLE
+                loadCashbackBalance(user.uid)
+
                 // Remover botão de voltar à conta de cliente se existir
                 removeSwitchToClientButton()
 
@@ -263,6 +276,21 @@ class ProfileActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * Carrega e exibe o saldo de cashback do cliente na linha do menu.
+     */
+    private fun loadCashbackBalance(userId: String) {
+        lifecycleScope.launch {
+            try {
+                val balance = cashbackManager.getBalance(userId)
+                binding.tvCashbackBalance.text =
+                    String.format(java.util.Locale("pt", "BR"), "R$ %.2f", balance)
+            } catch (e: Exception) {
+                android.util.Log.w("ProfileActivity", "Erro ao carregar cashback: ${e.message}")
+            }
+        }
+    }
+
     /**
      * Carrega a imagem do perfil
      */

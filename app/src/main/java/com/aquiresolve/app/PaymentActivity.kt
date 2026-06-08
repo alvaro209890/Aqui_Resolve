@@ -53,6 +53,14 @@ class PaymentActivity : AppCompatActivity() {
     private var clientState: String = ""
     private var clientCpf: String = ""
 
+    // Cashback
+    private val cashbackManager = CashbackManager()
+    private var cashbackBalance: Double = 0.0
+    private var appliedCashback: Double = 0.0
+    private var cashbackConfig: CashbackManager.CashbackConfig = CashbackManager.CashbackConfig()
+    private val clientId: String
+        get() = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+
     private val pixPaymentLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -83,6 +91,90 @@ class PaymentActivity : AppCompatActivity() {
         setupUI()
         setupTextWatchers()
         setupClickListeners()
+        setupCashback()
+    }
+
+    /**
+     * Valor efetivamente cobrado (valor do pedido menos o cashback aplicado).
+     */
+    private fun effectiveAmount(): Double = (orderAmount - appliedCashback).coerceAtLeast(0.0)
+
+    /**
+     * Carrega config + saldo de cashback e, se elegível, exibe a opção de uso.
+     */
+    private fun setupCashback() {
+        lifecycleScope.launch {
+            try {
+                cashbackConfig = cashbackManager.getConfig()
+                cashbackBalance = if (clientId.isNotEmpty()) cashbackManager.getBalance(clientId) else 0.0
+
+                val eligible = cashbackConfig.enabled &&
+                    cashbackConfig.allowRedeem &&
+                    cashbackBalance > 0.0 &&
+                    clientId.isNotEmpty()
+
+                if (!eligible) {
+                    binding.layoutCashback.visibility = View.GONE
+                    return@launch
+                }
+
+                binding.layoutCashback.visibility = View.VISIBLE
+                binding.tvCashbackAvailable.text =
+                    String.format("Disponível: R$ %.2f", cashbackBalance)
+
+                binding.switchUseCashback.setOnCheckedChangeListener { _, isChecked ->
+                    applyCashback(isChecked)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Falha ao preparar cashback: ${e.message}")
+                binding.layoutCashback.visibility = View.GONE
+            }
+        }
+    }
+
+    /**
+     * Aplica (ou remove) o desconto de cashback, respeitando o teto definido
+     * pelo painel admin (maxRedeemPercentage) e o saldo disponível.
+     */
+    private fun applyCashback(use: Boolean) {
+        if (use) {
+            val maxByOrder = orderAmount * cashbackConfig.maxRedeemFraction
+            appliedCashback = minOf(cashbackBalance, maxByOrder)
+            appliedCashback = Math.round(appliedCashback * 100.0) / 100.0
+        } else {
+            appliedCashback = 0.0
+        }
+        updateCashbackUI()
+    }
+
+    private fun updateCashbackUI() {
+        if (appliedCashback > 0.0) {
+            binding.layoutDiscountRow.visibility = View.VISIBLE
+            binding.layoutFinalTotalRow.visibility = View.VISIBLE
+            binding.tvCashbackDiscount.text = String.format("- R$ %.2f", appliedCashback)
+            binding.tvFinalAmount.text = String.format("R$ %.2f", effectiveAmount())
+
+            // Avisar quando o saldo não pôde ser usado totalmente (teto do admin)
+            if (appliedCashback < cashbackBalance) {
+                binding.tvCashbackAvailable.text = String.format(
+                    "Disponível: R$ %.2f (limite de %.0f%% por pedido)",
+                    cashbackBalance, cashbackConfig.maxRedeemPercentage
+                )
+            }
+        } else {
+            binding.layoutDiscountRow.visibility = View.GONE
+            binding.layoutFinalTotalRow.visibility = View.GONE
+        }
+    }
+
+    /**
+     * Resgata o cashback aplicado após um pagamento bem-sucedido.
+     */
+    private fun redeemAppliedCashbackIfAny() {
+        if (appliedCashback <= 0.0 || clientId.isEmpty()) return
+        lifecycleScope.launch {
+            cashbackManager.redeem(clientId, appliedCashback, orderId)
+        }
     }
     
     /**
@@ -268,7 +360,7 @@ class PaymentActivity : AppCompatActivity() {
         val intent = Intent(this, PixPaymentActivity::class.java).apply {
             putExtra(PixPaymentActivity.EXTRA_ORDER_ID, orderId)
             putExtra(PixPaymentActivity.EXTRA_ORDER_DESCRIPTION, orderDescription)
-            putExtra(PixPaymentActivity.EXTRA_ORDER_AMOUNT, orderAmount)
+            putExtra(PixPaymentActivity.EXTRA_ORDER_AMOUNT, effectiveAmount())
             putExtra(PixPaymentActivity.EXTRA_CLIENT_NAME, clientName)
             putExtra(PixPaymentActivity.EXTRA_CLIENT_EMAIL, clientEmail)
             putExtra(PixPaymentActivity.EXTRA_CLIENT_PHONE, clientPhone)
@@ -396,9 +488,11 @@ class PaymentActivity : AppCompatActivity() {
         zipCode: String,
         phone: String
     ) {
+        val cashbackLine = if (appliedCashback > 0.0)
+            "\nCashback aplicado: - R$ ${String.format("%.2f", appliedCashback)}" else ""
         val message = """
-            Confirma o pagamento de R$ ${String.format("%.2f", orderAmount)}?
-            
+            Confirma o pagamento de R$ ${String.format("%.2f", effectiveAmount())}?$cashbackLine
+
             Cartão: **** **** **** ${cardNumber.takeLast(4)}
             Titular: $cardHolder
         """.trimIndent()
@@ -475,7 +569,7 @@ class PaymentActivity : AppCompatActivity() {
                     cardData = cardData,
                     customerInfo = customerInfo,
                     billingAddress = billingAddress,
-                    amount = orderAmount,
+                    amount = effectiveAmount(),
                     description = orderDescription,
                     orderId = orderId
                 )
@@ -500,7 +594,10 @@ class PaymentActivity : AppCompatActivity() {
         when (result) {
             is PaymentResult.Success -> {
                 Log.d(TAG, "Pagamento aprovado")
-                
+
+                // Resgatar o cashback aplicado, se houver
+                redeemAppliedCashbackIfAny()
+
                 // Retornar sucesso para a activity anterior
                 val resultIntent = Intent().apply {
                     putExtra(PaymentResultCodes.EXTRA_TRANSACTION_ID, result.transactionId)
@@ -508,7 +605,7 @@ class PaymentActivity : AppCompatActivity() {
                     putExtra(PaymentResultCodes.EXTRA_PAYMENT_METHOD, "Cartão de Crédito")
                 }
                 setResult(PaymentResultCodes.RESULT_PAYMENT_SUCCESS, resultIntent)
-                
+
                 // Finalizar para retornar resultado ao CreateOrderActivity
                 finish()
             }
@@ -550,7 +647,7 @@ class PaymentActivity : AppCompatActivity() {
     ) {
         val confirmationIntent = Intent(this, PaymentConfirmationActivity::class.java).apply {
             putExtra(PaymentConfirmationActivity.EXTRA_TRANSACTION_ID, transactionId)
-            putExtra(PaymentConfirmationActivity.EXTRA_AMOUNT, orderAmount)
+            putExtra(PaymentConfirmationActivity.EXTRA_AMOUNT, effectiveAmount())
             putExtra(PaymentConfirmationActivity.EXTRA_PAYMENT_METHOD, paymentMethod)
             putExtra(PaymentConfirmationActivity.EXTRA_CARD_LAST_DIGITS, cardLastDigits)
             putExtra(PaymentConfirmationActivity.EXTRA_SERVICE_DESCRIPTION, orderDescription)
@@ -585,7 +682,12 @@ class PaymentActivity : AppCompatActivity() {
 
     private fun handlePixPaymentResult(resultCode: Int, data: Intent?) {
         when (resultCode) {
-            PaymentResultCodes.RESULT_PAYMENT_SUCCESS,
+            PaymentResultCodes.RESULT_PAYMENT_SUCCESS -> {
+                // Resgatar o cashback aplicado somente quando o PIX é confirmado
+                redeemAppliedCashbackIfAny()
+                setResult(resultCode, data)
+                finish()
+            }
             PaymentResultCodes.RESULT_PAYMENT_PENDING,
             PaymentResultCodes.RESULT_PAYMENT_FAILED -> {
                 setResult(resultCode, data)

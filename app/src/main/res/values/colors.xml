@@ -138,6 +138,13 @@
     <color name="light_gray">#F1F5F9</color>
     <color name="light_blue">#EFF6FF</color>
     
+    <!-- Cashback / Programa de Fidelidade (AquiCash) -->
+    <color name="cashback_dark">#0E2A47</color>
+    <color name="cashback_dark_card">#16365C</color>
+    <color name="cashback_bronze">#CD7F32</color>
+    <color name="cashback_prata">#9AA7B4</color>
+    <color name="cashback_ouro">#E0A52E</color>
+
     <!-- Payment Activity Colors (aliases) -->
     <color name="primary">@color/primary_color</color>
     <color name="background_light">@color/background_secondary</color>

@@ -235,6 +235,56 @@
                         android:background="@color/gray_200" />
 
                     <LinearLayout
+                        android:id="@+id/llCashback"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:padding="12dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_payment"
+                            app:tint="@color/secondary_color"
+                            android:layout_marginEnd="16dp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Meu Cashback"
+                            android:textSize="16sp"
+                            android:textColor="@color/text_primary" />
+
+                        <TextView
+                            android:id="@+id/tvCashbackBalance"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="R$ 0,00"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/secondary_color"
+                            android:layout_marginEnd="8dp" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:src="@drawable/ic_arrow_right"
+                            app:tint="@color/gray_400" />
+
+                    </LinearLayout>
+
+                    <View
+                        android:id="@+id/dividerCashback"
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/gray_200" />
+
+                    <LinearLayout
                         android:id="@+id/llNotifications"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

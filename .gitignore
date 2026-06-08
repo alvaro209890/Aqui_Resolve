@@ -40,6 +40,9 @@ app/google-services.json
 .DS_Store
 Thumbs.db
 
+# Arte de referência solta na raiz (versionada em docs/cashback-programa.jpg)
+/cashback
+
 # Kotlin/Java
 out/
 

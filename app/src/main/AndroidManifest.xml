@@ -62,6 +62,10 @@
             android:exported="false"
             android:theme="@style/Theme.LoginApp" />
         <activity
+            android:name=".CashbackActivity"
+            android:exported="false"
+            android:theme="@style/Theme.LoginApp" />
+        <activity
             android:name=".HelpSupportActivity"
             android:exported="false"
             android:theme="@style/Theme.LoginApp" />

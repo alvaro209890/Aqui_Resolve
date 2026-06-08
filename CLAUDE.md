@@ -35,7 +35,7 @@ Three-layer architecture with Manager pattern as the central abstraction:
 - **Activities (44+):** Each screen is a separate Activity using ViewBinding and coroutines (`lifecycleScope`).
 - **Managers:** All business logic lives in manager classes — not in Activities. Two categories:
   - **Firebase Managers** (`FirebaseAuthManager`, `FirebaseOrderManager`, `FirebaseChatManager`, `FirebaseImageManager`, `FirebaseStorageManager`, `FirebaseProviderManager`, `FirebasePrivacyManager`, `FirebaseBankDataManager`, `FirebaseChecklistManager`) — wrap Firestore/Auth/Storage operations.
-  - **Business Logic Managers** (`OrderManager`, `OrderDistributionManager`, `PaymentManager`, `SchedulingManager`, `ChatManager`, `NotificationManager`, `RatingManager`, `ServiceHistoryManager`) — orchestrate workflows.
+  - **Business Logic Managers** (`OrderManager`, `OrderDistributionManager`, `PaymentManager`, `SchedulingManager`, `ChatManager`, `NotificationManager`, `RatingManager`, `ServiceHistoryManager`, `CashbackManager`, `PromotionManager`) — orchestrate workflows.
 - **Models** in `models/` with Firestore `@PropertyName` annotations and a `payment/` subdirectory.
 - **Adapters** in `adapters/` — 16 RecyclerView adapters.
 - **Views** in `views/` — custom component (SignaturePad for digital signatures).
@@ -48,6 +48,8 @@ Three-layer architecture with Manager pattern as the central abstraction:
 **OS Checklist:** Ordem de Serviço lifecycle — GPS + timestamp on start, 10-question checklist (arrival + execution), 3-category photos (before/during/after), digital signatures (provider + client). Status: checklist_pending → photos_pending → signatures_pending → completed. Data in Firestore `checklists/{orderId}`.
 
 **Payment:** Pagar.me v5 API via Retrofit/OkHttp. Supports credit card (Luhn validation, brand detection) and PIX (QR code generation with ZXing, 5-second auto-polling for confirmation).
+
+**Cashback / AquiCash:** Loyalty program (`CashbackManager`, `PromotionManager`) configured by a single Firestore doc `app_config/cashback`. Two phases switched by `activePhase`: **growth** (tiered cashback Bronze/Prata/Ouro = 3/5/8% by accumulated `cashbackTotalSpent`, credited idempotently when the client opens a completed order; redeemable as discount in `PaymentActivity`) and **launch** (direct cart discount by service count: 2→5%, 3→10%, 4+→15%). **Combos** (apply in both phases) give a discount by category combination; the larger of quantity/combo wins. Cart discount is applied in `FirebaseCartManager.prepareCheckout` (writes `finalPrice`/`cartDiscountPercent`; provider commission untouched). Full details in `docs/SISTEMA_CASHBACK_AQUICASH.md` and admin-panel field reference in `docs/cashback-painel-admin.md`.
 
 **Chat:** Real-time via Firestore listeners. 5-minute access lock after order acceptance.
 
@@ -67,4 +69,4 @@ Firebase BOM 32.7.0 (Auth, Firestore, Storage, Messaging, Analytics), Retrofit 2
 
 ## Firebase
 
-Project: `aplicativoservico-143c2`. Config in `app/google-services.json`. Storage rules in `storage.rules`, indexes in `firestore.indexes.json`. Collections: `orders`, `checklists`, `chats`.
+Project: `aplicativoservico-143c2`. Config in `app/google-services.json`. Storage rules in `storage.rules`, indexes in `firestore.indexes.json`. Collections: `orders`, `checklists`, `chats`, `carts`, `users` (with `cashback_transactions` subcollection), `app_config` (doc `cashback`).

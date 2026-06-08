@@ -52,6 +52,16 @@ Activities → Managers → Firebase
 - **PIX:** Geração de QR Code (ZXing), polling automático a cada 5s
 - API em `https://aquiresolve.onrender.com/api/payments/`
 
+### Cashback / Fidelidade (AquiCash)
+- Programa configurável por **um único documento** Firestore `app_config/cashback`
+- **Duas fases** alternadas pelo painel admin (`activePhase`):
+  - **Crescimento (padrão):** cashback em **níveis** — Bronze (≤R$500) 3%, Prata (R$500–1.500) 5%, Ouro (>R$1.500) 8%, pelo total gasto acumulado
+  - **Lançamento:** desconto direto no carrinho por nº de serviços (2→5%, 3→10%, 4+→15%)
+- **Combos especiais** (valem nas duas fases): Elétrica+Hidráulica+Instalações 15%, Elétrica+Hidráulica 10%, Instalações+Hidráulica 10%, Manutenção de veículos 15%; aplica-se o **maior** desconto
+- Saldo, extrato e progresso de nível na tela do cliente; resgate como desconto no pagamento
+- Crédito idempotente por pedido; valor do prestador não é afetado pelo desconto
+- Detalhes técnicos em `docs/SISTEMA_CASHBACK_AQUICASH.md`; campos do painel em `docs/cashback-painel-admin.md`
+
 ### Segurança
 - Network security config com domains confiáveis
 - ProGuard ativado no release build
@@ -163,7 +173,7 @@ app/
 ## Firebase
 
 - **Projeto:** `aplicativoservico-143c2`
-- **Firestore:** Regras em `firestore.rules`, índices em `firestore.indexes.json`. Coleções: `orders`, `checklists`, `chats`, etc.
+- **Firestore:** Regras em `firestore.rules`, índices em `firestore.indexes.json`. Coleções: `orders`, `checklists`, `chats`, `carts`, `users` (subcoleção `cashback_transactions`), `app_config` (doc `cashback`), etc.
 - **Storage:** Regras em `storage.rules`
 - **Realtime Database:** Regras em `database.rules.json`
 

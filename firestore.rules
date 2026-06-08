@@ -59,8 +59,8 @@ service cloud.firestore {
           'serviceType', 'serviceName', 'description', 'address', 'zipCode',
           'complement', 'city', 'state', 'coordinates', 'scheduledDate',
           'preferredTimeSlot', 'images', 'cartCheckoutCode', 'cartItemId',
-          'status', 'paymentStatus', 'estimatedPrice',
-          'providerCommission', 'createdAt', 'updatedAt'
+          'status', 'paymentStatus', 'estimatedPrice', 'finalPrice',
+          'cartDiscountPercent', 'providerCommission', 'createdAt', 'updatedAt'
         ]);
     }
 
@@ -139,6 +139,21 @@ service cloud.firestore {
           resource.data.uid == null
         );
       allow delete: if isOwner(userId);
+
+      // Extrato de cashback do próprio cliente
+      match /cashback_transactions/{txId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update, delete: if false;
+      }
+    }
+
+    // ===== CONFIGURAÇÕES DO APP (editadas pelo painel admin) =====
+    // O app só lê. A escrita é feita pelo painel admin (Admin SDK ignora as regras).
+
+    match /app_config/{configId} {
+      allow read: if isSignedIn();
+      allow write: if false;
     }
 
     // ===== PRESTADORES =====

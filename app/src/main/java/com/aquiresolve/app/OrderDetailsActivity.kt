@@ -70,6 +70,7 @@ class OrderDetailsActivity : AppCompatActivity() {
     private val db = FirebaseFirestore.getInstance()
     private lateinit var orderManager: FirebaseOrderManager
     private lateinit var checklistManager: FirebaseChecklistManager
+    private val cashbackManager = CashbackManager()
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     // OS Checklist
@@ -243,6 +244,30 @@ class OrderDetailsActivity : AppCompatActivity() {
     /**
      * Atualiza a interface com os dados do pedido
      */
+    /**
+     * Credita o cashback do pedido concluído ao cliente. É idempotente
+     * (o CashbackManager usa um id determinístico por pedido), então pode ser
+     * chamado sempre que o cliente abrir um pedido concluído.
+     */
+    private fun creditCashbackIfEligible(order: OrderData) {
+        lifecycleScope.launch {
+            try {
+                val credited = cashbackManager.creditForCompletedOrder(order)
+                if (credited > 0.0) {
+                    showToast(
+                        String.format(
+                            java.util.Locale("pt", "BR"),
+                            "💸 Você ganhou R$ %.2f de cashback!",
+                            credited
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("OrderDetailsActivity", "Erro ao creditar cashback: ${e.message}")
+            }
+        }
+    }
+
     private fun updateUI(order: OrderData) {
         // Configurar ícone do serviço
         setServiceIcon(order.serviceName)
@@ -277,7 +302,12 @@ class OrderDetailsActivity : AppCompatActivity() {
         
         // Configurar status
         setStatusInfo(order.status)
-        
+
+        // Creditar cashback do cliente quando o pedido estiver concluído (idempotente)
+        if (!isProviderView && order.status == OrderData.STATUS_COMPLETED) {
+            creditCashbackIfEligible(order)
+        }
+
         // Configurar preço
         setPriceInfo(order)
         
