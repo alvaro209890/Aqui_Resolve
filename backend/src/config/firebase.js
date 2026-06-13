@@ -10,6 +10,11 @@ function initializeFirebase() {
 
   const config = loadEnv();
 
+  if (!config.firebaseProjectId || !config.firebaseClientEmail || !config.firebasePrivateKey) {
+    logger.warn('Firebase Admin SDK não inicializado — credenciais ausentes (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY)');
+    return admin;
+  }
+
   admin.initializeApp({
     credential: admin.credential.cert({
       projectId: config.firebaseProjectId,

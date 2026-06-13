@@ -55,6 +55,7 @@ class ClientHomeActivity : AppCompatActivity() {
         ProviderNewOrderAlertManager.refreshMonitoring()
         loadProfileImage()
         loadRecentOrders()
+        loadCashbackBalance()
         
         // Iniciar monitoramento de notificações para mostrar badge
         NotificationBadgeHelper.startListening(
@@ -123,6 +124,10 @@ class ClientHomeActivity : AppCompatActivity() {
 
         binding.btnNotifications.setOnClickListener {
             startActivity(Intent(this, NotificationHistoryActivity::class.java))
+        }
+
+        binding.cardCashback.setOnClickListener {
+            startActivity(Intent(this, CashbackActivity::class.java))
         }
 
         binding.btnCart.setOnClickListener {
@@ -239,6 +244,17 @@ class ClientHomeActivity : AppCompatActivity() {
 
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun loadCashbackBalance() {
+        val uid = auth.currentUser?.uid ?: return
+        lifecycleScope.launch {
+            try {
+                val snap = db.collection("users").document(uid).get().await()
+                val balance = snap.getDouble("cashbackBalance") ?: 0.0
+                binding.tvCashbackBalance.text = String.format(java.util.Locale("pt", "BR"), "R$ %.2f", balance)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun dpToPx(value: Int): Int {

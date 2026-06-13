@@ -22,6 +22,7 @@ interface ChecklistData {
   executedAsRequested?: boolean
   additionalService?: boolean
   serviceCompleted?: boolean
+  cleanAfterService?: boolean
   executionDescription?: string
   photosBefore?: string[]
   photosDuring?: string[]
@@ -181,6 +182,7 @@ export default function OsDetailPage() {
               <BoolField label="Serviço executado conforme solicitado?" value={checklist.executedAsRequested} />
               <BoolField label="Necessitou material adicional?" value={checklist.additionalService} />
               <BoolField label="Serviço concluído?" value={checklist.serviceCompleted} />
+              <BoolField label="Local limpo após execução?" value={checklist.cleanAfterService} />
             </CardContent>
           </Card>
 

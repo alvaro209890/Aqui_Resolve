@@ -62,10 +62,10 @@ function loadEnv() {
       required: false,
       defaultValue: 'https://api.pagar.me/core/v5'
     }),
-    pagarmeSecretKey: getEnv('PAGARME_SECRET_KEY'),
-    firebaseProjectId: getEnv('FIREBASE_PROJECT_ID'),
-    firebaseClientEmail: getEnv('FIREBASE_CLIENT_EMAIL'),
-    firebasePrivateKey: getEnv('FIREBASE_PRIVATE_KEY').replace(/\\n/g, '\n'),
+    pagarmeSecretKey: getEnv('PAGARME_SECRET_KEY', { required: false, defaultValue: '' }),
+    firebaseProjectId: getEnv('FIREBASE_PROJECT_ID', { required: false, defaultValue: '' }),
+    firebaseClientEmail: getEnv('FIREBASE_CLIENT_EMAIL', { required: false, defaultValue: '' }),
+    firebasePrivateKey: (getEnv('FIREBASE_PRIVATE_KEY', { required: false, defaultValue: '' }) || '').replace(/\\n/g, '\n'),
     corsOrigin: getEnv('CORS_ORIGIN', { required: false, defaultValue: '*' }),
     keepAliveEnabled: parseBoolean(
       getEnv('KEEP_ALIVE_ENABLED', {

@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, RefreshCw, Eye, ArrowRightLeft, XCircle, ChevronLeft, ChevronRight, AlertTriangle, User, MapPin } from "lucide-react"
+import { Search, RefreshCw, Eye, ArrowRightLeft, XCircle, ChevronLeft, ChevronRight, AlertTriangle, User, MapPin, Download } from "lucide-react"
 import Link from "next/link"
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -31,6 +31,37 @@ interface Order {
   address?: string
   status?: string
   estimatedPrice?: number
+  createdAt?: { seconds: number }
+}
+
+interface Provider {
+  id: string
+  nome?: string
+  name?: string
+  fullName?: string
+  verificationStatus?: string
+}
+
+function exportToCSV(orders: Order[]) {
+  const header = ["Protocolo", "Status", "Cliente", "Prestador", "Serviço", "Endereço", "Valor (R$)", "Criado em"]
+  const rows = orders.map(o => [
+    o.protocol ?? o.id.slice(0, 8),
+    STATUS_CONFIG[o.status ?? ""]?.label ?? o.status ?? "",
+    o.clientName ?? "",
+    o.assignedProviderName ?? "",
+    o.serviceName ?? o.serviceType ?? "",
+    o.address ?? "",
+    o.estimatedPrice != null ? Number(o.estimatedPrice).toFixed(2) : "",
+    o.createdAt ? new Date(o.createdAt.seconds * 1000).toLocaleDateString("pt-BR") : "",
+  ])
+  const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `pedidos_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export default function VisualizarServicosPage() {
@@ -47,6 +78,9 @@ export default function VisualizarServicosPage() {
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelling, setCancelling] = useState(false)
+  const [providers, setProviders] = useState<Provider[]>([])
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("pool")
+  const [exportingAll, setExportingAll] = useState(false)
   const { toast } = useToast()
   const LIMIT = 15
 
@@ -65,18 +99,33 @@ export default function VisualizarServicosPage() {
 
   useEffect(() => { fetchOrders() }, [fetchOrders])
 
+  // Carrega prestadores aprovados ao abrir o dialog de redirecionamento
+  useEffect(() => {
+    if (!redirectOrder) return
+    fetch("/api/providers/active")
+      .then(r => r.json())
+      .then(d => setProviders(d.providers ?? []))
+      .catch(() => null)
+  }, [redirectOrder])
+
   async function doRedirect() {
     if (!redirectOrder || !redirectReason.trim()) return
     setRedirecting(true)
     try {
+      const body: Record<string, string> = { reason: redirectReason }
+      if (selectedProviderId !== "pool") {
+        const prov = providers.find(p => p.id === selectedProviderId)
+        body.newProviderId = selectedProviderId
+        body.newProviderName = prov?.nome ?? prov?.name ?? prov?.fullName ?? selectedProviderId
+      }
       const res = await fetch(`/api/orders/${redirectOrder.id}/redirect`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: redirectReason }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!data.success) throw new Error(data.error)
-      toast({ title: "Pedido redirecionado", description: "Prestador removido — voltou para distribuição." })
-      setRedirectOrder(null); setRedirectReason(""); fetchOrders()
+      toast({ title: "Pedido redirecionado", description: data.message })
+      setRedirectOrder(null); setRedirectReason(""); setSelectedProviderId("pool"); fetchOrders()
     } catch (e: unknown) {
       toast({ title: "Erro", description: e instanceof Error ? e.message : String(e), variant: "destructive" })
     } finally { setRedirecting(false) }
@@ -99,6 +148,18 @@ export default function VisualizarServicosPage() {
     } finally { setCancelling(false) }
   }
 
+  async function handleExportAll() {
+    setExportingAll(true)
+    try {
+      const res = await fetch(`/api/orders?limit=1000&page=1`)
+      const data = await res.json()
+      if (data.success) exportToCSV(data.data ?? [])
+      else throw new Error(data.error)
+    } catch {
+      toast({ title: "Erro ao exportar", variant: "destructive" })
+    } finally { setExportingAll(false) }
+  }
+
   const totalPages = Math.ceil(total / LIMIT)
 
   return (
@@ -108,9 +169,14 @@ export default function VisualizarServicosPage() {
           <h1 className="text-2xl font-bold tracking-tight">Serviços</h1>
           <p className="text-sm text-muted-foreground">{total} pedido(s)</p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchOrders} disabled={loading} className="gap-2">
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportAll} disabled={exportingAll} className="gap-2">
+            {exportingAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Exportar CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={fetchOrders} disabled={loading} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-3 flex-wrap">
@@ -165,7 +231,7 @@ export default function VisualizarServicosPage() {
                       </Button>
                       {canRedirect && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" title="Redirecionar"
-                          onClick={() => { setRedirectOrder(order); setRedirectReason("") }}>
+                          onClick={() => { setRedirectOrder(order); setRedirectReason(""); setSelectedProviderId("pool") }}>
                           <ArrowRightLeft className="h-4 w-4" />
                         </Button>
                       )}
@@ -194,11 +260,30 @@ export default function VisualizarServicosPage() {
         </div>
       )}
 
+      {/* Dialog de Redirecionamento — agora com opção de direcionar para prestador específico */}
       <Dialog open={!!redirectOrder} onOpenChange={open => !open && setRedirectOrder(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-5 w-5 text-amber-600" />Redirecionar Serviço</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">Prestador <strong>{redirectOrder?.assignedProviderName}</strong> será removido e o pedido voltará para distribuição.</p>
+            <p className="text-sm text-muted-foreground">Prestador atual: <strong>{redirectOrder?.assignedProviderName}</strong></p>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Direcionar para</label>
+              <Select value={selectedProviderId} onValueChange={setSelectedProviderId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o destino" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pool">Devolver ao pool de distribuição</SelectItem>
+                  {providers.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nome ?? p.name ?? p.fullName ?? p.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-1">
               <label className="text-sm font-medium">Motivo (obrigatório)</label>
               <Textarea placeholder="Ex: Prestador não compareceu" value={redirectReason} onChange={e => setRedirectReason(e.target.value)} rows={3} />
@@ -207,7 +292,8 @@ export default function VisualizarServicosPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRedirectOrder(null)}>Cancelar</Button>
             <Button onClick={doRedirect} disabled={redirecting || !redirectReason.trim()} className="gap-2">
-              {redirecting && <RefreshCw className="h-4 w-4 animate-spin" />} Redirecionar
+              {redirecting && <RefreshCw className="h-4 w-4 animate-spin" />}
+              {selectedProviderId === "pool" ? "Devolver ao Pool" : "Redirecionar"}
             </Button>
           </DialogFooter>
         </DialogContent>
