@@ -300,6 +300,12 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    // Conversas consolidadas para a Central Operacional do painel admin.
+    // Escrita pelo app (cliente/prestador) ao enviar mensagem; leitura pelo admin e pelas partes.
+    match /chatConversations/{orderId} {
+      allow read, write: if isSignedIn();
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Notificações
     // ═══════════════════════════════════════════════════════════════════════════
@@ -357,19 +363,22 @@ service cloud.firestore {
     // Catálogo de serviços
     // ═══════════════════════════════════════════════════════════════════════════
 
+    // Catálogo de serviços — leitura por qualquer usuário autenticado (app + painel);
+    // escrita EXCLUSIVA via Admin SDK (rota /api/catalog do painel). Antes qualquer
+    // usuário autenticado podia adulterar o catálogo global; agora não.
     match /service_categories/{docId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if false;
     }
 
     match /service_types/{docId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if false;
     }
 
     match /service_providers/{docId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if false;
     }
 
     match /provider_reviews/{reviewId} {

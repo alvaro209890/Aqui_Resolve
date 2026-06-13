@@ -296,9 +296,7 @@ class CreateOrderActivity : AppCompatActivity() {
      * Configura o spinner de nichos quando a Activity é aberta sem pré-seleção
      */
     private fun setupNicheSpinner() {
-        val niches = getAllNiches()
-        val nicheAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, niches)
-        binding.spinnerServiceNiche.setAdapter(nicheAdapter)
+        bindNicheAdapter(getAllNiches())
 
         // Mostrar dropdown ao focar ou clicar
         binding.spinnerServiceNiche.threshold = 0
@@ -309,9 +307,22 @@ class CreateOrderActivity : AppCompatActivity() {
             binding.spinnerServiceNiche.showDropDown()
         }
 
+        // Garante o catálogo mais recente do painel admin: recarrega e atualiza o spinner.
+        lifecycleScope.launch {
+            CatalogRepository.load()
+            val updated = getAllNiches()
+            runOnUiThread { bindNicheAdapter(updated) }
+        }
+    }
+
+    /** (Re)associa o adapter de nichos preservando o listener de seleção. */
+    private fun bindNicheAdapter(niches: List<String>) {
+        val nicheAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, niches)
+        binding.spinnerServiceNiche.setAdapter(nicheAdapter)
+
         // Ao selecionar um nicho, atualizar tipos e guardar categoria efetiva
         binding.spinnerServiceNiche.setOnItemClickListener { _, _, position, _ ->
-            val selected = niches[position]
+            val selected = niches.getOrNull(position) ?: return@setOnItemClickListener
             effectiveCategory = selected
             setupServiceTypesForNiche(selected)
             // Abrir tipos logo após escolher o nicho para agilizar
@@ -320,25 +331,11 @@ class CreateOrderActivity : AppCompatActivity() {
     }
 
     /**
-     * Lista de nichos suportados
+     * Lista de nichos suportados — vinda do catálogo do painel admin (service_categories),
+     * com fallback para a lista estática quando o Firestore estiver vazio/indisponível.
      */
     private fun getAllNiches(): List<String> {
-        return listOf(
-            "Elétrica",
-            "Encanador",
-            "Instalação",
-            "Caixa d'água",
-            "Desentupimento manual",
-            "Desentupimento com maquinário até 2 m",
-            "Caça-vazamentos",
-            "Limpeza de estofados",
-            "Ar condicionado",
-            "Eletrodomésticos",
-            "Chaveiro residencial",
-            "Serviços automotivos",
-            "Montagem de móveis",
-            "Faxina"
-        )
+        return CatalogRepository.cachedNicheNames()
     }
 
     /**
@@ -458,7 +455,13 @@ class CreateOrderActivity : AppCompatActivity() {
                 "Faxina completa (apt/casa média 2 a 3 quartos) - 6h a 8h",
                 "Faxina pesada (casa grande, pós-obra, mudança) - 10h"
             )
-            else -> listOf("Selecione um nicho primeiro")
+            // Nicho cadastrado no painel admin sem tipos pré-definidos: fluxo genérico
+            // (cliente descreve o serviço no campo de detalhes; preço "A consultar").
+            else -> if (niche.isBlank()) {
+                listOf("Selecione um nicho primeiro")
+            } else {
+                listOf("Outros serviços (descreva nos detalhes)")
+            }
         }
 
         val options = serviceTypes.map { serviceType ->
@@ -487,6 +490,11 @@ class CreateOrderActivity : AppCompatActivity() {
     private fun getClientPriceLabel(niche: String, serviceType: String): String {
         if (serviceType == "Selecione um nicho primeiro") {
             return ""
+        }
+
+        // Serviço genérico de nicho cadastrado no painel (sem tabela de preços): a consultar.
+        if (serviceType.startsWith("Outros serviços")) {
+            return "A consultar"
         }
 
         if (com.aquiresolve.app.models.ServicePricing.isConsultPrice(niche, serviceType)) {

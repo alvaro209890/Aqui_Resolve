@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Calendar, User, Star, Clock, MessageCircle, Phone, Mail, AlertTriangle, CheckCircle, XCircle, UserPlus, Trash2, ClipboardList } from "lucide-react"
+import { MapPin, Calendar, User, Star, Clock, MessageCircle, Phone, Mail, AlertTriangle, CheckCircle, XCircle, UserPlus, Trash2, ClipboardList, RotateCcw, Loader2 } from "lucide-react"
 import { ServiceOperationalPanel } from "@/components/orders/service-operational-panel"
 import { CheckInPanel } from "@/components/orders/checkin-panel"
 import { OrderLocationMap } from "@/components/orders/order-location-map"
@@ -134,6 +134,36 @@ export function OrderDetailModal({
     paymentMethod: "",
     estimatedDuration: 0,
   })
+
+  const [refunding, setRefunding] = useState(false)
+
+  const handleRefund = async (orderId: string) => {
+    const reason = window.prompt(
+      "Confirmar reembolso deste pedido na Pagar.me?\n\nInforme o motivo (opcional) e clique OK para reembolsar o valor total."
+    )
+    if (reason === null) {
+      return
+    }
+    setRefunding(true)
+    try {
+      const res = await fetch(`/api/orders/${orderId}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason || undefined }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        window.alert(data.message || "Reembolso processado com sucesso.")
+        onClose()
+      } else {
+        window.alert(`Falha no reembolso: ${data.error || "erro desconhecido"}`)
+      }
+    } catch (error) {
+      window.alert(`Erro ao reembolsar: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setRefunding(false)
+    }
+  }
 
   useEffect(() => {
     if (!order || mode !== "edit") {
@@ -447,6 +477,18 @@ export function OrderDetailModal({
             {mode === "edit" && onUpdate ? (
               <Button type="submit" className="w-full bg-orange-500 text-white hover:bg-orange-600 sm:w-auto">
                 Salvar alteracoes
+              </Button>
+            ) : null}
+            {mode === "view" && order.paymentStatus === "paid" ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleRefund(order.id)}
+                disabled={refunding}
+                className="w-full text-amber-700 hover:text-amber-800 sm:w-auto"
+              >
+                {refunding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                Reembolsar
               </Button>
             ) : null}
             {mode === "view" && onDelete ? (

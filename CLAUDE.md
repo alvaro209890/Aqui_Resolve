@@ -74,6 +74,14 @@ Activity → Manager → Firebase/Retrofit
 | `notifications/{id}` | Notificações FCM |
 | `carts/{uid}/items` | Carrinho de compras |
 | `app_config/cashback` | Config do programa de cashback (só leitura) |
+| `service_categories` / `service_types` | Catálogo de serviços (só leitura no app; escrita só Admin SDK) |
+| `chatConversations/{orderId}` | Conversa consolidada p/ a Central Operacional do painel (upsert pelo app) |
+
+### Catálogo de serviços dinâmico (app ↔ painel)
+- O app **lê** o catálogo de `service_categories` via `CatalogRepository.kt` (pré-carregado no `AppApplication`, com **fallback estático** em `ServiceNicheCatalog` se o Firestore estiver vazio/offline — zero regressão).
+- Cliente (`CreateOrderActivity`), prestador (`ProviderSignUpActivity`/`ProviderProfileFragment`) e o matching (`ServiceNicheCatalog.applyDynamicCatalog`/`selectableNiches`) usam esse catálogo.
+- O painel gerencia o catálogo em `/dashboard/servicos/catalogo-app`, **escrevendo via `POST/DELETE /api/catalog` (Admin SDK)** — o app só lê.
+- Semear/ressincronizar: `node dashboard_admin/scripts/seed-catalog.mjs` (rodar de dentro de `dashboard_admin/` com Node 22).
 
 ### Fluxo de Pedido
 ```
@@ -207,6 +215,9 @@ Todas as rotas estão em `dashboard_admin/app/api/`:
 | `/api/notifications/send` | POST | Envia FCM push notification por uid, userIds[], token, tokens[] ou topic |
 | `/api/orders/[id]/redirect` | POST | Remove prestador do pedido e retorna para distribuição (motivo obrigatório) |
 | `/api/checklists/[orderId]` | GET | Retorna checklist + dados do pedido para visualização da OS |
+| `/api/catalog` | POST | Cria/atualiza serviço do catálogo do app (Admin SDK — `service_categories` + `service_types`) |
+| `/api/catalog` | DELETE | Remove serviço do catálogo (`?id=`) das duas coleções (Admin SDK) |
+| `/api/orders/[id]/refund` | POST | Reembolsa o pagamento do pedido via Pagar.me (Admin SDK). Body `{ amount?, reason? }` |
 | `/api/admin-logs` | GET | Lista logs de auditoria (filtros: action, targetType, limit) |
 | `/api/admin-logs` | POST | Grava ação de auditoria (action, targetId, targetType, payload) |
 | `/api/financial/providers` | GET | Saldo/ganhos dos prestadores |
@@ -307,6 +318,10 @@ firebase deploy --only firestore:rules,firestore:indexes
 - `isOwner(uid)` — uid do token == uid do doc
 
 **Regra crítica:** A coleção `adminmaster` só pode ser lida/escrita pelo Firebase Admin SDK (regras bloqueiam client SDK). O login do painel usa Admin SDK no servidor.
+
+**Catálogo de serviços (segurança):** `service_categories`, `service_types` e `service_providers` têm `allow read: if isSignedIn()` e **`allow write: if false`** — escrita exclusiva via Admin SDK (rota `/api/catalog`). Antes a escrita era liberada a qualquer usuário autenticado, o que permitia adulterar o catálogo global pelo app; isso foi corrigido.
+
+**Atenção sobre `isAdmin()`:** hoje **nenhum** usuário tem custom claim (`role:'admin'`/`admin:true`), então as regras que dependem de `isAdmin()` via client SDK não passam. Isso é intencionalmente coberto porque **toda escrita privilegiada do painel passa por API Routes (Admin SDK)**, que ignoram as regras. Se um dia for preciso escrita privilegiada via client SDK no painel, setar o claim no usuário Firebase Auth correspondente (ver abaixo).
 
 **Para setar custom claims de admin:**
 ```js
@@ -428,6 +443,10 @@ Cashback é uma configuração financeira crítica. Só o Firebase Admin SDK (vi
 | Pedidos não aparecem | `NEXT_PUBLIC_FIREBASE_*` não configurados | Preencher `.env.local` |
 | Pagar.me falha | Chave de API incorreta ou expirada | Verificar `API_KEY_PRIVATE_PAGARME` |
 | Storage Upload falha | `storageBucket` incorreto | Verificar `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` |
+| Catálogo não salva no painel | Regra bloqueia escrita client-SDK (esperado) | O painel usa `POST/DELETE /api/catalog` (Admin SDK); confira `FIREBASE_SERVICE_ACCOUNT` no Vercel |
+| Catálogo não aparece no app | `service_categories` vazio | Rodar `node dashboard_admin/scripts/seed-catalog.mjs`; o app cai no fallback estático se vazio |
+| Reembolso falha no painel | `API_KEY_PRIVATE_PAGARME` ausente ou cobrança não-paga | Conferir chave no Vercel; só cobranças `paid`/`captured` são reembolsáveis |
+| Webhook Pagar.me rejeitado (401) | `PAGARME_WEBHOOK_SECRET` no Render ≠ segredo enviado pelo painel Pagar.me | Manter os dois iguais OU deixar ambos vazios (polling de 5s do app já confirma o pagamento) |
 
 ### Render — Env Vars Corretas
 

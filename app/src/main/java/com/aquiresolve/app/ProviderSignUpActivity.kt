@@ -64,9 +64,25 @@ class ProviderSignUpActivity : AppCompatActivity() {
      * Configura chips de nichos de serviço para cadastro do prestador.
      */
     private fun setupServiceNicheChips() {
-        binding.chipGroupServiceNiches.removeAllViews()
+        renderServiceNicheChips(ServiceNicheCatalog.selectableNiches())
 
-        ServiceNicheCatalog.providerSelectableNiches.forEach { niche ->
+        // Atualiza com o catálogo mais recente do painel admin (se houver novos nichos).
+        lifecycleScope.launch {
+            CatalogRepository.load()
+            runOnUiThread { renderServiceNicheChips(ServiceNicheCatalog.selectableNiches()) }
+        }
+
+        binding.chipGroupServiceNiches.setOnCheckedStateChangeListener { _, checkedIds ->
+            if (checkedIds.isNotEmpty()) {
+                binding.tvServiceNicheError.visibility = View.GONE
+            }
+        }
+    }
+
+    /** Renderiza os chips de nichos a partir da lista informada (preserva o estado vazio inicial). */
+    private fun renderServiceNicheChips(niches: List<String>) {
+        binding.chipGroupServiceNiches.removeAllViews()
+        niches.forEach { niche ->
             val chip = Chip(this).apply {
                 text = niche
                 isCheckable = true
@@ -75,12 +91,6 @@ class ProviderSignUpActivity : AppCompatActivity() {
                 isCloseIconVisible = false
             }
             binding.chipGroupServiceNiches.addView(chip)
-        }
-
-        binding.chipGroupServiceNiches.setOnCheckedStateChangeListener { _, checkedIds ->
-            if (checkedIds.isNotEmpty()) {
-                binding.tvServiceNicheError.visibility = View.GONE
-            }
         }
     }
 

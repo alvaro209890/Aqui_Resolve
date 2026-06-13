@@ -186,7 +186,7 @@ class ProviderProfileFragment : Fragment() {
         val chipGroup = binding.chipGroupServices
         chipGroup.removeAllViews()
 
-        ServiceNicheCatalog.providerSelectableNiches.forEach { niche ->
+        ServiceNicheCatalog.selectableNiches().forEach { niche ->
             val chip = Chip(requireContext()).apply {
                 text = niche
                 isCheckable = true

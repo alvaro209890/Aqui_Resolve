@@ -1,7 +1,9 @@
 ﻿package com.aquiresolve.app
 
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
@@ -60,7 +62,10 @@ class FirebaseChatManager {
             
             // Atualizar a sala de chat
             updateChatRoom(message.orderId, message)
-            
+
+            // Atualizar/criar a conversa para o painel admin (Central Operacional)
+            upsertChatConversation(message.orderId, message)
+
             Result.success(docRef.id)
         } catch (e: Exception) {
             Result.failure(e)
@@ -248,6 +253,78 @@ class FirebaseChatManager {
         }
     }
     
+    /**
+     * Cria/atualiza `chatConversations/{orderId}` para alimentar a Central Operacional do painel admin.
+     * Na primeira mensagem resolve as identidades pelo pedido (orders/{orderId}); nas demais só atualiza
+     * a última mensagem (merge), sem sobrescrever status/priority/notas definidos pelo admin.
+     */
+    private suspend fun upsertChatConversation(orderId: String, message: ChatMessage) {
+        try {
+            val messageType = when {
+                !message.imageUrl.isNullOrEmpty() -> "image"
+                !message.documentUrl.isNullOrEmpty() -> "file"
+                else -> "text"
+            }
+            val lastMessage = mapOf(
+                "content" to message.message,
+                "senderName" to message.senderName,
+                "senderId" to message.senderId,
+                "timestamp" to message.timestamp,
+                "messageType" to messageType
+            )
+
+            val convRef = firestore.collection("chatConversations").document(orderId)
+            val existing = convRef.get().await()
+
+            if (existing.exists()) {
+                convRef.set(
+                    mapOf(
+                        "orderId" to orderId,
+                        "lastMessage" to lastMessage,
+                        "updatedAt" to Timestamp.now()
+                    ),
+                    SetOptions.merge()
+                ).await()
+                return
+            }
+
+            // Primeira mensagem: resolve cliente/prestador pelo pedido.
+            val order = firestore.collection("orders").document(orderId).get().await()
+            val clienteId = order.getString("clientId")
+                ?: if (message.senderType == "client") message.senderId else ""
+            val clienteName = order.getString("clientName")
+                ?: if (message.senderType == "client") message.senderName else ""
+            val prestadorId = order.getString("assignedProvider")
+                ?: if (message.senderType == "provider") message.senderId else ""
+            val prestadorName = order.getString("assignedProviderName")
+                ?: order.getString("providerName")
+                ?: if (message.senderType == "provider") message.senderName else ""
+            val protocol = order.getString("protocol")
+                ?: order.getString("orderProtocol")
+                ?: ""
+
+            convRef.set(
+                mapOf(
+                    "orderId" to orderId,
+                    "clienteId" to clienteId,
+                    "clienteName" to clienteName,
+                    "prestadorId" to prestadorId,
+                    "prestadorName" to prestadorName,
+                    "orderProtocol" to protocol,
+                    "status" to "active",
+                    "priority" to "medium",
+                    "lastMessage" to lastMessage,
+                    "unreadCount" to mapOf("cliente" to 0, "prestador" to 0, "admin" to 0),
+                    "createdAt" to Timestamp.now(),
+                    "updatedAt" to Timestamp.now()
+                )
+            ).await()
+        } catch (e: Exception) {
+            // Não falha o envio da mensagem se a sincronização da conversa falhar.
+            e.printStackTrace()
+        }
+    }
+
     suspend fun deleteMessage(orderId: String, messageId: String): Result<Unit> {
         return try {
             firestore

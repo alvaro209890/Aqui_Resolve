@@ -3,12 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   collection,
-  deleteDoc,
-  doc,
   onSnapshot,
-  setDoc,
-  Timestamp,
-  updateDoc,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -170,7 +165,7 @@ export default function CatalogoAppPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!db || !form.name.trim()) {
+    if (!form.name.trim()) {
       return
     }
 
@@ -179,39 +174,26 @@ export default function CatalogoAppPage() {
     const displayOrder = Number(form.displayOrder || 0)
     const aliases = parseAliases(form.aliases)
 
-    const payload = {
-      name,
-      title: name,
-      label: name,
-      slug,
-      description: form.description.trim(),
-      active: form.active,
-      isActive: form.active,
-      enabled: form.active,
-      displayOrder: Number.isFinite(displayOrder) ? displayOrder : 0,
-      order: Number.isFinite(displayOrder) ? displayOrder : 0,
-      sortOrder: Number.isFinite(displayOrder) ? displayOrder : 0,
-      icon: form.icon.trim() || "wrench",
-      aliases,
-      keywords: aliases,
-      updatedAt: Timestamp.now(),
-    }
-
     setSaving(true)
     try {
-      if (editingId) {
-        await updateDoc(doc(db, "service_categories", editingId), payload)
-        await setDoc(doc(db, "service_types", editingId), payload, { merge: true })
-      } else {
-        const newRef = doc(collection(db, "service_categories"))
-        await setDoc(newRef, {
-          ...payload,
-          createdAt: Timestamp.now(),
-        })
-        await setDoc(doc(db, "service_types", newRef.id), {
-          ...payload,
-          createdAt: Timestamp.now(),
-        })
+      const res = await fetch("/api/catalog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingId || undefined,
+          name,
+          slug,
+          description: form.description.trim(),
+          active: form.active,
+          displayOrder: Number.isFinite(displayOrder) ? displayOrder : 0,
+          icon: form.icon.trim() || "wrench",
+          aliases,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(`Erro ao salvar serviço: ${data.error ?? res.statusText}`)
+        return
       }
       resetForm()
     } finally {
@@ -220,28 +202,38 @@ export default function CatalogoAppPage() {
   }
 
   const handleToggleActive = async (service: ServiceCategoryDoc) => {
-    if (!db) return
-    await updateDoc(doc(db, "service_categories", service.id), {
-      active: !service.active,
-      isActive: !service.active,
-      enabled: !service.active,
-      updatedAt: Timestamp.now(),
+    const res = await fetch("/api/catalog", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: service.id,
+        name: service.name,
+        slug: service.slug,
+        description: service.description,
+        active: !service.active,
+        displayOrder: service.displayOrder,
+        icon: service.icon,
+        aliases: service.aliases,
+      }),
     })
-    await setDoc(doc(db, "service_types", service.id), {
-      active: !service.active,
-      isActive: !service.active,
-      enabled: !service.active,
-      updatedAt: Timestamp.now(),
-    }, { merge: true })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(`Erro ao atualizar serviço: ${data.error ?? res.statusText}`)
+    }
   }
 
   const handleDelete = async (service: ServiceCategoryDoc) => {
-    if (!db) return
     if (!confirm(`Remover "${service.name}" do catálogo do aplicativo?`)) {
       return
     }
-    await deleteDoc(doc(db, "service_categories", service.id))
-    await deleteDoc(doc(db, "service_types", service.id)).catch(() => undefined)
+    const res = await fetch(`/api/catalog?id=${encodeURIComponent(service.id)}`, {
+      method: "DELETE",
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(`Erro ao remover serviço: ${data.error ?? res.statusText}`)
+      return
+    }
     if (editingId === service.id) {
       resetForm()
     }

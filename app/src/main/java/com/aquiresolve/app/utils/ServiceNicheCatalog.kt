@@ -1,4 +1,4 @@
-﻿package com.aquiresolve.app.utils
+package com.aquiresolve.app.utils
 
 import com.aquiresolve.app.models.OrderData
 import java.text.Normalizer
@@ -6,9 +6,18 @@ import java.util.Locale
 
 /**
  * Catálogo central de nichos e regra de matching entre prestador e pedido.
+ *
+ * A lista estática abaixo é o FALLBACK. Em tempo de execução, o catálogo pode ser estendido
+ * com nichos cadastrados no painel admin (coleção `service_categories`) via [applyDynamicCatalog].
+ * Os nichos estáticos preservam exatamente o comportamento anterior (zero regressão); nichos
+ * dinâmicos são apenas somados ao mapa de canonicalização e à lista selecionável.
  */
 object ServiceNicheCatalog {
 
+    /** Nicho carregado dinamicamente do Firestore (nome canônico + apelidos para matching). */
+    data class DynamicNiche(val name: String, val aliases: List<String> = emptyList())
+
+    /** Lista estática (fallback) usada quando o catálogo dinâmico ainda não foi carregado. */
     val providerSelectableNiches = listOf(
         "Elétrica",
         "Encanador",
@@ -26,7 +35,8 @@ object ServiceNicheCatalog {
         "Faxina"
     )
 
-    private val normalizedToCanonical = buildMap {
+    /** Mapa base estático (nome normalizado → nome canônico), incluindo compatibilidade legada. */
+    private val baseNormalizedToCanonical: Map<String, String> = buildMap {
         providerSelectableNiches.forEach { put(normalizeKey(it), it) }
 
         // Compatibilidade com nomes legados.
@@ -34,6 +44,14 @@ object ServiceNicheCatalog {
         put("encanamento", "Encanador")
         put("estofados", "Limpeza de estofados")
     }
+
+    /** Catálogo dinâmico (null = não carregado → usa fallback estático). */
+    @Volatile
+    private var dynamicNiches: List<DynamicNiche>? = null
+
+    /** Mapa efetivo de canonicalização (estático + dinâmico). Rebuild em [applyDynamicCatalog]. */
+    @Volatile
+    private var normalizedToCanonical: Map<String, String> = baseNormalizedToCanonical
 
     private val keyEletrica = normalizeKey("Elétrica")
     private val keyEncanador = normalizeKey("Encanador")
@@ -49,6 +67,34 @@ object ServiceNicheCatalog {
     private val keyServicosAutomotivos = normalizeKey("Serviços automotivos")
     private val keyMontagemMoveis = normalizeKey("Montagem de móveis")
     private val keyFaxina = normalizeKey("Faxina")
+
+    /**
+     * Aplica o catálogo vindo do painel admin. Mantém o mapa estático como base e soma os
+     * nichos/apelidos dinâmicos. Se a lista vier vazia, mantém o fallback estático.
+     */
+    @Synchronized
+    fun applyDynamicCatalog(niches: List<DynamicNiche>) {
+        val valid = niches.filter { it.name.isNotBlank() }
+        if (valid.isEmpty()) return
+
+        dynamicNiches = valid
+        normalizedToCanonical = buildMap {
+            putAll(baseNormalizedToCanonical)
+            valid.forEach { niche ->
+                val canonical = niche.name.trim()
+                put(normalizeKey(canonical), canonical)
+                niche.aliases.forEach { alias ->
+                    val key = normalizeKey(alias)
+                    if (key.isNotBlank()) put(key, canonical)
+                }
+            }
+        }
+    }
+
+    /** Lista de nichos selecionáveis: dinâmica se carregada, senão o fallback estático. */
+    fun selectableNiches(): List<String> {
+        return dynamicNiches?.map { it.name }?.takeIf { it.isNotEmpty() } ?: providerSelectableNiches
+    }
 
     fun canonicalizeNiche(raw: String): String {
         if (raw.isBlank()) return ""
