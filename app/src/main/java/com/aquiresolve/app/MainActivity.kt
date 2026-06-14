@@ -429,8 +429,10 @@ class MainActivity : AppCompatActivity() {
      * Manipula o clique em "Esqueci minha senha"
      */
     private fun handleForgotPassword() {
-        // Navegar para a tela de recuperação de senha
+        // Navegar para a tela de recuperação de senha, levando o email já digitado
         val intent = Intent(this, ForgotPasswordActivity::class.java)
+        val typedEmail = binding.etEmail.text?.toString()?.trim()
+        if (!typedEmail.isNullOrEmpty()) intent.putExtra("prefill_email", typedEmail)
         startActivity(intent)
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }

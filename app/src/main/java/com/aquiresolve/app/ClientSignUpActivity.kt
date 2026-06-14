@@ -82,7 +82,16 @@ class ClientSignUpActivity : AppCompatActivity() {
         binding.tvSignIn.setOnClickListener {
             finish()
         }
-        
+
+        // Link para recuperação de senha (leva o email já digitado, se houver)
+        binding.tvForgotPassword.setOnClickListener {
+            val intent = Intent(this, ForgotPasswordActivity::class.java)
+            val typedEmail = binding.etEmail.text?.toString()?.trim()
+            if (!typedEmail.isNullOrEmpty()) intent.putExtra("prefill_email", typedEmail)
+            startActivity(intent)
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        }
+
         // Botão voltar
         binding.btnBack.setOnClickListener {
             finish()

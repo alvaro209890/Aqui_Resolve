@@ -162,7 +162,13 @@ class ProviderSignUpActivity : AppCompatActivity() {
         binding.tvSignIn.setOnClickListener {
             finish()
         }
-        
+
+        // Link para recuperação de senha
+        binding.tvForgotPassword.setOnClickListener {
+            startActivity(Intent(this, ForgotPasswordActivity::class.java))
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        }
+
         // Botão voltar
         binding.btnBack.setOnClickListener {
             finish()

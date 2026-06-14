@@ -370,6 +370,19 @@
 
                 </LinearLayout>
 
+                <!-- Forgot password -->
+                <TextView
+                    android:id="@+id/tvForgotPassword"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="@string/forgot_password"
+                    android:textSize="14sp"
+                    android:textColor="@color/text_secondary"
+                    android:padding="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:layout_marginTop="2dp" />
+
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>

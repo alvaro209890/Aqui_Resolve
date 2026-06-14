@@ -100,6 +100,24 @@ Fonte única de verdade = painel admin → Firestore `catalog_services`. Um doc 
 - **Match exato exigido:** `catalog_services.niche` == categoria enviada pelo app; `catalog_services.name` == serviceType.
 - Semear/migrar (~300 serviços da tabela hardcoded, deriva o % — drift R$0,00): `node dashboard_admin/scripts/seed-catalog-services.mjs` (de `dashboard_admin/`, Node ≥20). Remapeia "Desentupimento com maquinário" → "Desentupimento com maquinário até 2 m".
 
+### Recuperação de senha (esqueci minha senha)
+- **Tela:** `ForgotPasswordActivity` (`activity_forgot_password.xml`). Acessível de **3 lugares**:
+  login (`MainActivity` → `tvForgotPassword`), cadastro de cliente (`ClientSignUpActivity`) e
+  cadastro de prestador (`ProviderSignUpActivity`) — todos têm o link "Esqueci minha senha".
+- **Como funciona:** usa `FirebaseAuth.sendPasswordResetEmail(email).await()` (Firebase envia o
+  email de redefinição pela infra padrão do projeto — nada a configurar no Console). Login e
+  cadastro de cliente passam o email já digitado via extra `prefill_email`.
+- **Privacidade:** o projeto tem **proteção contra enumeração de email** ligada → a API retorna
+  sucesso mesmo para email não cadastrado (não revela se existe). Por isso a mensagem é "se houver
+  uma conta com este email, você receberá o link" e **não** existe erro "email não encontrado".
+- **Gotchas já corrigidos (não regredir):**
+  1. O envio precisa de `.await()` — sem ele, qualquer falha era engolida e o sucesso aparecia sempre.
+  2. O `successLayout` fica **dentro** do `cardRecovery`; esconder o card inteiro deixava a tela
+     em branco. A activity esconde só o `formLayout` (container do formulário) e mostra o
+     `successLayout` — o card permanece visível.
+- **Testado ao vivo no Waydroid** (ver skill `aquiresolve-emulador`): login → "Esqueci minha
+  senha" → enviar → tela "Email enviado com sucesso!". Firebase confirma o envio (REST `sendOobCode`).
+
 ### Fluxo de Pedido
 ```
 awaiting_payment → pending → distributing → assigned → in_progress → completed

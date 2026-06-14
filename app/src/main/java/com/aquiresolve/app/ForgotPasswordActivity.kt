@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.aquiresolve.app.databinding.ActivityForgotPasswordBinding
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class ForgotPasswordActivity : AppCompatActivity() {
 
@@ -22,6 +23,11 @@ class ForgotPasswordActivity : AppCompatActivity() {
 
         setupUI()
         setupClickListeners()
+
+        // Pré-preenche o email vindo do login/cadastro, se houver
+        intent.getStringExtra("prefill_email")?.takeIf { it.isNotBlank() }?.let { email ->
+            binding.etEmail.setText(email)
+        }
     }
 
     private fun setupUI() {
@@ -67,11 +73,13 @@ class ForgotPasswordActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val auth = FirebaseConfig.getAuth()
-                auth.sendPasswordResetEmail(email)
-                
+                // .await() garante que o envio realmente concluiu antes de mostrar sucesso;
+                // sem isso, qualquer falha (rede etc.) era engolida e o sucesso aparecia sempre.
+                auth.sendPasswordResetEmail(email).await()
+
                 setLoadingState(false)
                 showSuccessMessage()
-                
+
             } catch (e: Exception) {
                 setLoadingState(false)
                 handleError(e.message ?: "Erro ao enviar email de recuperação")
@@ -108,23 +116,37 @@ class ForgotPasswordActivity : AppCompatActivity() {
     }
 
     private fun showSuccessMessage() {
-        binding.cardRecovery.visibility = View.GONE
+        // Esconde só o formulário (o card permanece) e revela a mensagem de sucesso.
+        // Antes escondia o cardRecovery inteiro — e como o successLayout fica DENTRO dele,
+        // a tela ficava em branco mesmo com o envio bem-sucedido.
+        binding.formLayout.visibility = View.GONE
         binding.successLayout.visibility = View.VISIBLE
-        
-        Toast.makeText(this, "✅ Email de recuperação enviado com sucesso!", Toast.LENGTH_LONG).show()
+
+        Toast.makeText(
+            this,
+            "✅ Se houver uma conta com este email, você receberá o link. Verifique a caixa de entrada e o spam.",
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun handleError(errorMessage: String) {
+        val msg = errorMessage.lowercase()
         when {
-            errorMessage.contains("no user record") -> {
-                binding.tilEmail.error = "Email não encontrado"
+            // Email mal formatado (validação extra do Firebase)
+            msg.contains("badly formatted") || msg.contains("invalid_email") || msg.contains("invalid email") -> {
+                binding.tilEmail.error = "Email inválido"
                 binding.etEmail.requestFocus()
             }
-            errorMessage.contains("network") -> {
-                Toast.makeText(this, "❌ Erro de conexão. Verifique sua internet.", Toast.LENGTH_LONG).show()
+            // Excesso de tentativas
+            msg.contains("too many") || msg.contains("too-many-requests") -> {
+                Toast.makeText(this, "❌ Muitas tentativas. Aguarde alguns minutos e tente novamente.", Toast.LENGTH_LONG).show()
+            }
+            // Sem conexão
+            msg.contains("network") || msg.contains("timeout") || msg.contains("unreachable") -> {
+                Toast.makeText(this, "❌ Erro de conexão. Verifique sua internet e tente novamente.", Toast.LENGTH_LONG).show()
             }
             else -> {
-                Toast.makeText(this, "❌ $errorMessage", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "❌ Não foi possível enviar agora. Tente novamente.", Toast.LENGTH_LONG).show()
             }
         }
     }
