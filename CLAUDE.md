@@ -60,6 +60,21 @@ Este arquivo é lido automaticamente pelo Claude Code. Contém tudo que qualquer
 ./gradlew test
 ```
 
+### Geração de APK no GitHub Actions (CI)
+Workflow `.github/workflows/build-apk.yml`. Dispara **manual** (Actions → "Build
+APK" → Run workflow, com toggle de release) ou por **tag `v*`**. Restaura
+`google-services.json` + keystore de **secrets**, builda `assembleDebug` (sempre)
+e `assembleRelease` (assinado, quando há keystore) e publica os `.apk` como
+**artifacts** (30 dias).
+
+- Secrets (gitignored → guardados no repo): `GOOGLE_SERVICES_JSON_BASE64`,
+  `UPLOAD_KEYSTORE_JKS_BASE64`, `UPLOAD_KEYSTORE_CREDENTIALS_BASE64`
+  (recriar: `base64 -w0 <arquivo> | gh secret set <NOME> -R alvaro209890/AquiResolve`).
+- Baixar: `gh run download <run-id> -n aquiresolve-release-apk` (ou `-debug-apk`).
+- **release** ~4–6 MB (R8 + shrinkResources + assinado) = distribuir; **debug**
+  ~13–15 MB = só teste. Trocar entre eles exige **desinstalar** o app antes
+  (assinatura diferente). Detalhes: `docs/CORRECAO_PERMISSION_DENIED_PEDIDO_2026-06-15.md`.
+
 ### Padrão Arquitetural
 ```
 Activity → Manager → Firebase/Retrofit
@@ -487,6 +502,9 @@ Cashback é uma configuração financeira crítica. Só o Firebase Admin SDK (vi
 | Novos serviços não aparecem na lista do app | App ainda com APK antigo (lista de serviços era hardcoded) | Gerar novo APK (`./gradlew assembleDebug`); preço de serviços já existentes muda na hora via backend |
 | Reembolso falha no painel | `API_KEY_PRIVATE_PAGARME` ausente ou cobrança não-paga | Conferir chave no Vercel; só cobranças `paid`/`captured` são reembolsáveis |
 | Webhook Pagar.me rejeitado (401) | `PAGARME_WEBHOOK_SECRET` no Render ≠ segredo enviado pelo painel Pagar.me | Manter os dois iguais OU deixar ambos vazios (polling de 5s do app já confirma o pagamento) |
+| **`PERMISSION_DENIED` ao fazer pedido (com fotos)** | `validClientOrderUpdate` → `orderSensitiveAssignmentFieldsUnchanged()` lia `assignedProvider`/códigos direto; pedido recém-criado não tem esses campos (proibidos por `validOrderCreate`), então o `update("images")` pós-criação era negado e o pedido revertia | **CORRIGIDO** (commit `94d9136`, ruleset `c4770cb9`): guard usa `get(campo, null)`. É correção de **regra** → vale pro APK já instalado, sem novo APK. Detalhes: `docs/CORRECAO_PERMISSION_DENIED_PEDIDO_2026-06-15.md` |
+| `PERMISSION_DENIED` ao criar pedido (APK antigo) | APK pré-18/05 grava o `OrderData` inteiro com `status='distributing'` e sem `paymentStatus`; `validOrderCreate` (pay-before-distribution) nega | Rebuildar o APK (o código atual já grava o payload enxuto correto) |
+| Precisa publicar/testar regra sem `firebase` CLI | A máquina não tem o Firebase CLI | Usar a REST API com a service account: `POST /v1/projects/{P}/rulesets` + `PATCH …/releases/cloud.firestore?updateMask=rulesetName`; testar com ID token (`signInWithCustomToken`) na REST do Firestore. Ver doc da correção 2026-06-15 |
 
 ### Render — Env Vars Corretas
 
