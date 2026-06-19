@@ -353,7 +353,7 @@ class OrderDetailsActivity : AppCompatActivity() {
             // Mostrar informações de reembolso se cancelado pelo cliente e aguardando reembolso
             if (order.cancelledBy == "client" && order.refundStatus == "pending") {
                 binding.cardRefundInfo.visibility = View.VISIBLE
-                binding.tvRefundInfo.text = "💳 O valor pago será reembolsado automaticamente em até 24 horas.\n\nVocê receberá uma notificação quando o reembolso for processado."
+                binding.tvRefundInfo.text = "💳 O valor pago será reembolsado em até 24 horas.\n\nVocê receberá uma notificação quando o reembolso for processado."
             } else {
                 binding.cardRefundInfo.visibility = View.GONE
             }
@@ -988,9 +988,13 @@ class OrderDetailsActivity : AppCompatActivity() {
             else -> "Tem certeza que deseja cancelar este pedido? Esta ação não pode ser desfeita."
         }
         
-        // Mensagem sobre reembolso
-        val refundMessage = "\n\n💳 IMPORTANTE: O valor pago será reembolsado automaticamente na sua conta em até 24 horas após o cancelamento."
-        
+        // Mensagem sobre reembolso — só faz sentido se o pedido realmente foi pago.
+        val refundMessage = if (orderWasPaid(order)) {
+            "\n\n💳 IMPORTANTE: O valor pago será reembolsado na sua conta em até 24 horas após o cancelamento."
+        } else {
+            ""
+        }
+
         AlertDialog.Builder(this)
             .setTitle("❌ Cancelar Pedido")
             .setMessage(message + refundMessage)
@@ -1019,8 +1023,12 @@ class OrderDetailsActivity : AppCompatActivity() {
             else -> "• O pedido será marcado como cancelado\n• Você pode criar um novo pedido a qualquer momento"
         }
         
-        val refundInfo = "\n\n💳 REEMBOLSO:\n• O valor pago será reembolsado automaticamente\n• O reembolso será processado em até 24 horas\n• O valor retornará na mesma forma de pagamento utilizada\n• Você receberá uma notificação quando o reembolso for processado"
-        
+        val refundInfo = if (orderWasPaid(order)) {
+            "\n\n💳 REEMBOLSO:\n• O valor pago será reembolsado\n• O reembolso será processado em até 24 horas\n• O valor retornará na mesma forma de pagamento utilizada\n• Você receberá uma notificação quando o reembolso for processado"
+        } else {
+            ""
+        }
+
         AlertDialog.Builder(this)
             .setTitle("ℹ️ Informações sobre Cancelamento")
             .setMessage(info + refundInfo)
@@ -1029,6 +1037,10 @@ class OrderDetailsActivity : AppCompatActivity() {
             }
             .show()
     }
+
+    /** Indica se o pedido realmente teve pagamento confirmado (logo, gera reembolso). */
+    private fun orderWasPaid(order: OrderData): Boolean =
+        order.paymentStatus?.lowercase() in setOf("paid", "captured", "approved", "confirmed")
 
     /**
      * Cancela o pedido
@@ -1051,9 +1063,14 @@ class OrderDetailsActivity : AppCompatActivity() {
                     android.util.Log.d("OrderDetails", "✅ Pedido cancelado com sucesso no Firebase")
                     
                     // Mostrar mensagem de sucesso com informação sobre reembolso
+                    val successMessage = if (orderWasPaid(order)) {
+                        "Seu pedido foi cancelado com sucesso!\n\n💳 O valor pago será reembolsado na sua conta em até 24 horas.\n\nVocê receberá uma notificação quando o reembolso for processado."
+                    } else {
+                        "Seu pedido foi cancelado com sucesso!"
+                    }
                     AlertDialog.Builder(this@OrderDetailsActivity)
                         .setTitle("✅ Pedido Cancelado")
-                        .setMessage("Seu pedido foi cancelado com sucesso!\n\n💳 O valor pago será reembolsado automaticamente na sua conta em até 24 horas.\n\nVocê receberá uma notificação quando o reembolso for processado.")
+                        .setMessage(successMessage)
                         .setPositiveButton("Entendi") { _, _ ->
                             // Recarregar dados para atualizar a interface
                             loadOrderDetails()

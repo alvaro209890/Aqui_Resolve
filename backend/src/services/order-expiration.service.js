@@ -74,29 +74,44 @@ async function expireOrders() {
       });
 
       try {
+        // Pedido já pago que expira (ex.: guincho, sempre pago antes de distribuir)
+        // precisa de reembolso — senão o cliente fica cobrado sem atendimento e o
+        // admin não tem sinal na fila de reembolso.
+        const paymentStatus = String(data.paymentStatus || '').toLowerCase();
+        const wasPaid = ['paid', 'captured', 'approved', 'confirmed'].includes(paymentStatus);
+
         // Batch POR pedido — evita que falha em um cancele todos os outros
         const orderBatch = db.batch();
 
-        // 1. Atualizar status para expired
-        orderBatch.update(doc.ref, {
+        // 1. Atualizar status para expired (+ pendência de reembolso se foi pago)
+        const orderUpdate = {
           status: 'expired',
           expiredAt: admin.firestore.Timestamp.now(),
           updatedAt: admin.firestore.Timestamp.now()
-        });
+        };
+        if (wasPaid) {
+          orderUpdate.refundStatus = 'pending';
+          orderUpdate.refundRequestedAt = admin.firestore.Timestamp.now();
+        }
+        orderBatch.update(doc.ref, orderUpdate);
 
         // 2. Salvar notificação no Firestore
+        const clientMessage = wasPaid
+          ? `Seu pedido #${data.protocol || doc.id.slice(0, 8)} não foi aceito por nenhum prestador dentro do prazo. O valor pago será reembolsado.`
+          : `Seu pedido #${data.protocol || doc.id.slice(0, 8)} não foi aceito por nenhum prestador dentro do prazo.`;
         const notificationRef = db.collection('notifications').doc();
         orderBatch.set(notificationRef, {
           userId: data.clientId,
           title: 'Pedido não encontrou prestador',
-          message: `Seu pedido #${data.protocol || doc.id.slice(0, 8)} não foi aceito por nenhum prestador dentro do prazo.`,
+          message: clientMessage,
           type: 'order_update',
           orderId: doc.id,
           isRead: false,
           timestamp: admin.firestore.Timestamp.now(),
           data: {
             status: 'expired',
-            protocol: data.protocol || ''
+            protocol: data.protocol || '',
+            refundPending: wasPaid ? 'true' : 'false'
           }
         });
 
@@ -105,7 +120,7 @@ async function expireOrders() {
         // 3. Enviar notificação push via FCM
         await sendPushNotification(db, data.clientId, {
           title: 'Pedido não encontrou prestador',
-          message: `Seu pedido #${data.protocol || doc.id.slice(0, 8)} não foi aceito por nenhum prestador.`,
+          message: clientMessage,
           type: 'order',
           orderId: doc.id
         });

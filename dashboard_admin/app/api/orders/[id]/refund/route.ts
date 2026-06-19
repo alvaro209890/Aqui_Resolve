@@ -124,6 +124,9 @@ export async function POST(
     const isPartial = partialAmountCents !== undefined
     await orderRef.update({
       paymentStatus: isPartial ? 'partially_refunded' : 'refunded',
+      // Encerra a pendência de reembolso aberta pelo cancelamento do cliente — sem isso
+      // o app continuaria exibindo "será reembolsado em 24h" mesmo após o estorno.
+      refundStatus: isPartial ? 'partial' : 'completed',
       refundedAt: admin.firestore.FieldValue.serverTimestamp(),
       refundedBy: 'admin',
       refundReason: body.reason ?? null,

@@ -434,13 +434,6 @@ class FirebaseOrderManager {
     }
     
     /**
-     * Cancela um pedido (método simplificado)
-     */
-    suspend fun cancelOrder(orderId: String): Result<Unit> {
-        return updateOrderStatus(orderId, OrderData.STATUS_CANCELLED)
-    }
-    
-    /**
      * Submete avaliação de pedido concluído com validação de regras de negócio.
      *
      * Regras:
@@ -714,7 +707,6 @@ class FirebaseOrderManager {
                 return Result.failure(Exception("Pedido não encontrado"))
             }
             
-            // Se cancelado pelo cliente, adicionar status de reembolso
             val updates = mutableMapOf<String, Any>(
                 "status" to OrderData.STATUS_CANCELLED,
                 "cancelledAt" to Timestamp.now(),
@@ -722,9 +714,13 @@ class FirebaseOrderManager {
                 "cancellationReason" to reason,
                 "updatedAt" to Timestamp.now()
             )
-            
-            // Se cancelado pelo cliente, marcar como aguardando reembolso
-            if (cancelledBy == "client") {
+
+            // Só sinaliza reembolso se o pedido REALMENTE foi pago. Cancelar um pedido
+            // ainda em 'awaiting_payment' (nada cobrado) não deve criar pendência de
+            // reembolso nem prometer estorno ao cliente.
+            val paymentStatus = (documentSnapshot.getString("paymentStatus") ?: "").lowercase()
+            val wasPaid = paymentStatus in setOf("paid", "captured", "approved", "confirmed")
+            if (cancelledBy == "client" && wasPaid) {
                 updates["refundStatus"] = "pending"
                 updates["refundRequestedAt"] = Timestamp.now()
             }
